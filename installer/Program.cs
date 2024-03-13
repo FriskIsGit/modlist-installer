@@ -1,4 +1,6 @@
-﻿namespace modlist_installer.installer;
+﻿using System.Diagnostics;
+
+namespace modlist_installer.installer;
 
 class Program {
     private static void Main(string[] args) {
@@ -6,7 +8,7 @@ class Program {
             PrintHelp();
             return;
         }
-
+        
         switch (args[0]) {
             case "show":
                 if (args.Length == 1) {
@@ -16,6 +18,22 @@ class Program {
                 CLI.displayMods(args[1]);
                 break;
             case "install":
+                
+                break;
+            
+            case "test-cache":
+                var cache = ModCache.load();
+                for (int i = 100; i < 200; i++) {
+                    cache.put("mod" + i, (uint)i);
+                }
+                cache.serialize();
+                Console.WriteLine("Finished");
+                break;
+            case "test-author":
+                var timer = Stopwatch.StartNew();
+                var mods = new FlameAPI().fetchModsOfAuthor("MysticDrew");
+                timer.Stop();
+                Console.WriteLine($"FETCHED AUTHOR MODS IN {timer.Elapsed.TotalMilliseconds}ms");
                 break;
         }
         
