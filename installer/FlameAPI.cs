@@ -1,5 +1,7 @@
 using System.Net;
 using System.Net.Http.Headers;
+using System.Text;
+using System.Text.Json;
 
 namespace modlist_installer.installer;
 
@@ -7,6 +9,7 @@ public class FlameAPI {
     // CF API for acquiring files
     private const string CF_API = "https://api.curseforge.com/v1/";
     private const string CF_WIDGET_AUTHOR = "https://api.cfwidget.com/author/search/";
+    public const string CF_MC_MODS = "https://www.curseforge.com/minecraft/mc-mods/";
     
     private readonly HttpClient client = new();
     private string cfbmToken = "";
@@ -15,15 +18,17 @@ public class FlameAPI {
         cfbmToken = token;
     }
 
-    // CF WIDGET for acquiring project ids by name
-    public List<Mod> fetchModsOfAuthor(string author) {
+    // Using CF WIDGET to acquire project ids by name
+    public ModAuthor? fetchAuthor(string author) {
         var response = fetchJson($"{CF_WIDGET_AUTHOR}{author}");
-        Console.WriteLine("code: " + response.statusCode);
-        Console.WriteLine(response.content);
-        return new List<Mod>();
+        if (response.statusCode != HttpStatusCode.OK) {
+            Console.WriteLine($"Status code: {response.statusCode}");
+            return null;
+        }
+        return JsonSerializer.Deserialize<ModAuthor>(response.content);
     }
     
-    public SimpleResponse fetchJson(string url) {
+    private SimpleResponse fetchJson(string url) {
         client.Timeout = TimeSpan.FromSeconds(6);
         var getRequest = new HttpRequestMessage {
             RequestUri = new Uri(url),
@@ -57,11 +62,45 @@ public class FlameAPI {
 }
 
 public struct SimpleResponse {
-    public HttpStatusCode statusCode;
-    public string content;
+    public readonly HttpStatusCode statusCode;
+    public readonly string content;
     public SimpleResponse(HttpStatusCode code, string content) {
         statusCode = code;
         this.content = content;
     }
 }
 
+
+public struct ModAuthor {
+    public uint id { get; set; }
+    public string username { get; set; }
+    public Project[] projects { get; set; }
+}
+
+// sort of like Mods
+public struct Project {
+    public uint id { get; set; }
+    public string name { get; set; }
+
+    // since .NET 5
+    public string convertToURL() {
+        var urlName = new StringBuilder();
+        foreach (var chr in name) {
+            switch (chr) {
+                case >= 'a' and <= 'z':
+                    urlName.Append(chr);
+                    break;
+                case >= 'A' and <= 'Z':
+                    urlName.Append(char.ToLower(chr));
+                    break;
+                case '-':
+                case '/':
+                case ' ':
+                    urlName.Append('-');
+                    break;
+            }
+        }
+
+        return $"{FlameAPI.CF_MC_MODS}{urlName}";
+    }
+}
