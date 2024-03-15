@@ -8,7 +8,6 @@ class Program {
             return;
         }
 
-        var flameAPI = new FlameAPI();
         switch (args[0]) {
             case "show":
                 if (args.Length == 1) {
@@ -18,7 +17,7 @@ class Program {
                 CLI.displayMods(args[1]);
                 break;
             case "install":
-                
+                CLI.installMods(args[1]);
                 break;
             
             case "test-cache":
@@ -35,20 +34,7 @@ class Program {
                     return;
                 }
 
-                ModAuthor? maybeAuthor = flameAPI.fetchAuthor(args[1]);
-                if (maybeAuthor == null) {
-                    Console.WriteLine("Author not found!");
-                    return;
-                }
-
-                ModAuthor author = maybeAuthor.Value;
-                Console.WriteLine("MOD_NAME | ID | INFERRED_URL");
-                Console.WriteLine("----------------------------");
-                foreach (var proj in author.projects) {
-                    Console.WriteLine($"{proj.name} | {proj.id} | {proj.convertToURL()}");
-                }
-
-                Console.WriteLine("Found " + author.projects.Length + " projects");
+                CLI.displayAuthor(args[1]);
                 break;
         }
         
@@ -61,7 +47,7 @@ class Program {
         Console.WriteLine("1. Enumerate the list of mods (OFFLINE).");
         Console.WriteLine("modlist show modlist.html");
         Console.WriteLine("2. Install specified modlist (CF)");
-        Console.WriteLine("modlist show modlist.html");
+        Console.WriteLine("modlist install modlist.html");
         Console.WriteLine("3. Fetch author by name, displaying their projects (CFWidget)");
         Console.WriteLine("modlist author <name>");
     }

@@ -60,21 +60,27 @@ public class ModCache {
         timer.Stop();
         Console.WriteLine($"SERIALIZED CACHE IN {timer.Elapsed.TotalMilliseconds}ms");
     }
-    
-    public bool put(string name, uint id) {
-        if (name.Length == 0) {
-            return false;
-        }
-        mods[name] = id;
-        return true;
+
+    public int size() {
+        return mods.Count;
     }
     
-    public uint? get(string name) {
+    public void put(string name, uint id) {
         if (name.Length == 0) {
-            return null;
+            return;
         }
-
-        return mods[name];
+        mods[name] = id;
+    }
+    
+    public uint get(string name) {
+        if (name.Length == 0) {
+            return 0;
+        }
+        uint id;
+        if (mods.TryGetValue(name, out id)) {
+            return id;
+        }
+        return 0;
     }
     
     private static (string, uint)? parseEntry(string entry) {

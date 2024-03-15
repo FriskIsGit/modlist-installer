@@ -4,12 +4,19 @@ public struct Mod {
     public readonly string name;
     public readonly string url;
     public readonly string author;
+    // id by default zero - not fetched
+    public uint id = 0;
     
     
-    public Mod(string name, string url) {
-        this.name = name;
+    public Mod(string description, string url) {
         this.url = url;
-        author = extractAuthor(name);
+        
+        name = description;
+        var bracket = description.IndexOf('(');
+        if (bracket != -1) {
+            name = name[..(bracket-1)];
+        }
+        author = extractAuthor(description);
     }
 
     private static string extractAuthor(string modName) {

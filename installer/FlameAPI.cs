@@ -8,19 +8,26 @@ namespace modlist_installer.installer;
 public class FlameAPI {
     // CF API for acquiring files
     private const string CF_API = "https://api.curseforge.com/v1/";
+    public const string CF_FILES = "https://www.curseforge.com/api/v1/mods/227874/files?pageIndex=0&pageSize=100&sort=dateCreated&sortDescending=true&removeAlphas=true";
     private const string CF_WIDGET_AUTHOR = "https://api.cfwidget.com/author/search/";
     public const string CF_MC_MODS = "https://www.curseforge.com/minecraft/mc-mods/";
     
     private readonly HttpClient client = new();
     private string cfbmToken = "";
 
+    public FlameAPI(string mc_version) {
+        // BaseAddress, Timeout, MaxResponseContentBufferSize are properties that cannot be modified..
+        client.Timeout = TimeSpan.FromSeconds(6);
+    }
+    
     public void setCloudflareToken(string token) {
         cfbmToken = token;
     }
 
     // Using CF WIDGET to acquire project ids by name
     public ModAuthor? fetchAuthor(string author) {
-        var response = fetchJson($"{CF_WIDGET_AUTHOR}{author}");
+        string url = $"{CF_WIDGET_AUTHOR}{author}";
+        var response = fetchJson(url);
         if (response.statusCode != HttpStatusCode.OK) {
             Console.WriteLine($"Status code: {response.statusCode}");
             return null;
@@ -28,8 +35,7 @@ public class FlameAPI {
         return JsonSerializer.Deserialize<ModAuthor>(response.content);
     }
     
-    private SimpleResponse fetchJson(string url) {
-        client.Timeout = TimeSpan.FromSeconds(6);
+    public SimpleResponse fetchJson(string url) {
         var getRequest = new HttpRequestMessage {
             RequestUri = new Uri(url),
             Method = HttpMethod.Get,
@@ -43,7 +49,6 @@ public class FlameAPI {
     }
     
     public SimpleResponse fetchHtml(string url) {
-        client.Timeout = TimeSpan.FromSeconds(6);
         var getRequest = new HttpRequestMessage {
             RequestUri = new Uri(url),
             Method = HttpMethod.Get,
