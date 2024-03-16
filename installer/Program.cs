@@ -7,7 +7,7 @@ class Program {
             PrintHelp();
             return;
         }
-
+        
         switch (args[0]) {
             case "show":
                 if (args.Length == 1) {
@@ -17,16 +17,21 @@ class Program {
                 CLI.displayMods(args[1]);
                 break;
             case "install":
-                CLI.installMods(args[1]);
-                break;
-            
-            case "test-cache":
-                var cache = ModCache.load();
-                for (int i = 100; i < 200; i++) {
-                    cache.put("mod" + i, (uint)i);
+                switch (args.Length) {
+                    case 1:
+                        Console.WriteLine("Path to modlist is required.");
+                        return;
+                    case 2:
+                        Console.WriteLine("Version not specified, defaulting to 1.12.2");
+                        CLI.installMods(args[1], "1.12.2");
+                        return;
+                    case 3:
+                        string version = args[2].Trim();
+                        Console.WriteLine($"Version: {version}");
+                        CLI.installMods(args[1], version);
+                        return;
                 }
-                cache.serialize();
-                Console.WriteLine("Finished");
+
                 break;
             case "author":
                 if (args.Length == 1) {
@@ -35,6 +40,12 @@ class Program {
                 }
 
                 CLI.displayAuthor(args[1]);
+                break;
+            case "test":
+                var flameApi = new FlameAPI();
+                var response = flameApi.fetchJson("https://www.curseforge.com/api/v1/mods/228895/files/2336727/download");
+                Console.WriteLine(response.statusCode);
+                
                 break;
         }
         
@@ -46,8 +57,8 @@ class Program {
         
         Console.WriteLine("1. Enumerate the list of mods (OFFLINE).");
         Console.WriteLine("modlist show modlist.html");
-        Console.WriteLine("2. Install specified modlist (CF)");
-        Console.WriteLine("modlist install modlist.html");
+        Console.WriteLine("2. Install specified modlist (CF) targeting the latest release of specified version");
+        Console.WriteLine("modlist install modlist.html <version>");
         Console.WriteLine("3. Fetch author by name, displaying their projects (CFWidget)");
         Console.WriteLine("modlist author <name>");
     }

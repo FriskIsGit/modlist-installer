@@ -3,11 +3,15 @@ using WebScrapper.scrapper;
 namespace modlist_installer.installer;
 
 public class CLI {
-    private static FlameAPI flameAPI = new ("1.12.2");
+    
+    private static FlameAPI flameAPI = new ();
 
     public static void displayMods(string path) {
         Console.WriteLine("Parsing mods..");
         var mods = parseMods(path);
+        if (mods.Count == 0) {
+            return;
+        }
         foreach (var mod in mods) {
             Console.WriteLine(mod);
         }
@@ -49,8 +53,12 @@ public class CLI {
     /// 4. Search for mod id by name in author's projects <br/>
     /// 5. Call CF mods/{mod_id}/files endpoint with mod id and search for user's desired version, selecting latest release <br/>
     /// </summary>
-    public static void installMods(string path) {
+    public static async void installMods(string path, string version) {
+        flameAPI.setMcVersion(version);
         var mods = parseMods(path);
+        if (mods.Count == 0) {
+            return;
+        }
         Console.WriteLine($"Mods parsed: {mods.Count}");
         var modCache = ModCache.load();
         Console.WriteLine($"Loaded cache size: {modCache.size()}");
@@ -70,11 +78,22 @@ public class CLI {
                 // Populate cache, TODO - cache every project that's retrieved for good measure
                 modCache.put(mod.name, id);
             }
-            Console.WriteLine(mod);
-            SimpleResponse? response = flameAPI.fetchJson(FlameAPI.CF_FILES);
-            Console.WriteLine(response.Value.statusCode);
-            Console.WriteLine(response.Value.content);
+            // Fill the field, could be useful
+            mod.id = id;
             
+            Console.WriteLine(mod);
+            ModFileInfo modInfo = flameAPI.fetchModFile(id);
+            if (modInfo.fileName.Length == 0) {
+                Console.WriteLine("Download URL not found, are you sure this mod was released for your version?");
+                failures += 1;
+                continue;
+            }
+
+            Console.WriteLine($"Attempting mod: {modInfo}");
+            // progress with cursor move?
+            string downloadURL = $"{FlameAPI.CF_MODS}/{id}/files/{modInfo.fileId}/download";
+            await flameAPI.downloadFile(downloadURL);
+            Console.WriteLine("Download done?");
         }
         Console.WriteLine($"Failures: {failures}");
         Console.WriteLine($"Serializing cache of {modCache.size()} entries");
