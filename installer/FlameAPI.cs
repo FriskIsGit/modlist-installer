@@ -79,7 +79,11 @@ public class FlameAPI {
 
             bool foundMatch = false;
             foreach (var a_version in versionArray) {
-                if (a_version != null && a_version.GetValue<string>() == version) {
+                if (a_version == null) {
+                    continue;
+                }
+                var parsed_version = a_version.GetValue<string>();
+                if (version.StartsWith(parsed_version)) {
                     foundMatch = true;
                     break;
                 }
@@ -106,6 +110,7 @@ public class FlameAPI {
             Console.WriteLine("No matching mod files were found for given ID");
             return ModFileInfo.NotFound();
         }
+
         return modFiles[0];
     }
     
