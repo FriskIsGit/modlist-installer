@@ -1,9 +1,11 @@
+using System.Diagnostics;
 using WebScrapper.scrapper;
 
 namespace modlist_installer.installer;
 
 public class CLI {
-    
+    // MAKE MOD LOADER AN ARGUMENT
+    private const string MODLOADER = "Forge";
     private static FlameAPI flameAPI = new ();
 
     public static void displayMods(string path) {
@@ -44,7 +46,7 @@ public class CLI {
     }
 
     // const to limit the input size for testing purposes
-    private const int LIMIT = 1;
+    private const int LIMIT = 500;
     /// <summary>
     /// Steps taken: <br/>
     /// 1. Parse mods from modlist.html <br/>
@@ -53,7 +55,7 @@ public class CLI {
     /// 4. Search for mod id by name in author's projects <br/>
     /// 5. Call CF mods/{mod_id}/files endpoint with mod id and search for user's desired version, selecting latest release <br/>
     /// </summary>
-    public static async void installMods(string path, string version) {
+    public static void installMods(string path, string version) {
         flameAPI.setMcVersion(version);
         var mods = parseMods(path);
         if (mods.Count == 0) {
@@ -66,13 +68,19 @@ public class CLI {
         int failures = 0;
         for (int m = 0; m < mods.Count && m < LIMIT; m++) {
             var mod = mods[m];
+            Console.WriteLine(mod);
             uint id = modCache.get(mod.name);
+            
 
             if (id == 0) {
+                if (mod.author.Length == 0) {
+                    Console.WriteLine("Author name is empty and mod has no known name-to-id mapping. Skipping!");
+                    continue;
+                }
                 id = reverseSearch(mod.name, mod.author);
                 if (id == 0) {
                     failures += 1;
-                    Console.WriteLine($"Mod {mod} cannot be downloaded, include its name in cache?");
+                    Console.WriteLine($"Mod {mod} - cannot be downloaded, include its name in cache?");
                     continue;
                 }
                 // Populate cache, TODO - cache every project that's retrieved for good measure
@@ -81,19 +89,31 @@ public class CLI {
             // Fill the field, could be useful
             mod.id = id;
             
-            Console.WriteLine(mod);
             ModFileInfo modInfo = flameAPI.fetchModFile(id);
-            if (modInfo.fileName.Length == 0) {
-                Console.WriteLine("Download URL not found, are you sure this mod was released for your version?");
-                failures += 1;
-                continue;
+            switch (modInfo.result) {
+                case Result.SUCCESS:
+                    break;
+                case Result.NOT_FOUND:
+                    Console.WriteLine("Download URL not found, are you sure this mod was released for your version?");
+                    failures += 1;
+                    continue;
+                case Result.TIMED_OUT:
+                    Console.WriteLine("Download timed out, likely because of too many releases.");
+                    failures += 1;
+                    continue;
             }
-
-            Console.WriteLine($"Attempting mod: {modInfo}");
+            
             // progress with cursor move?
             string downloadURL = $"{FlameAPI.CF_MODS}/{id}/files/{modInfo.fileId}/download";
-            await flameAPI.downloadFile(downloadURL);
-            Console.WriteLine("Download done?");
+            Console.WriteLine($"DOWNLOAD URL {downloadURL}");
+            var timer = Stopwatch.StartNew();
+            bool success = flameAPI.downloadFile(downloadURL, modInfo.fileName);
+            if (success) {
+                Console.WriteLine($"Downloaded {modInfo.fileName} in {timer.Elapsed.Milliseconds}ms");
+            } else {
+                failures++;
+                Console.WriteLine($"Failed on {modInfo.fileName}");
+            }
         }
         Console.WriteLine($"Failures: {failures}");
         Console.WriteLine($"Serializing cache of {modCache.size()} entries");
@@ -107,9 +127,15 @@ public class CLI {
             Console.WriteLine("Author not found!");
             return 0;
         }
+
         ModAuthor author = maybeAuthor.Value;
+        if (author.projects is null) {
+            Console.WriteLine("It can be false according to trimming.");
+            return 0;
+        }
         foreach (var proj in author.projects) {
-            if (proj.name.StartsWith(modName)) {
+            if (proj.name.StartsWith(modName) && proj.matchesKind(MODLOADER)) {
+                // it must not contain the MODLOADER
                 return proj.id;
             }
         }
