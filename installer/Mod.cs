@@ -1,3 +1,5 @@
+using System.Text;
+
 namespace modlist_installer.installer;
 
 public struct Mod {
@@ -36,10 +38,23 @@ public struct Mod {
         }
         return modName[(by + 3)..end];
     }
-    
+
+    private const int MINIMUM_NAME_LENGTH = 24;
+    private const int MINIMUM_AUTHOR_LENGTH = 14;
+
+    private static string pad(string str, int minLength) {
+        var builder = new StringBuilder(str);
+        var padding = minLength - str.Length;
+        for (int i = 0; i < padding; i++) {
+            builder.Append(' ');
+        }
+
+        return builder.ToString();
+    }
     public override string ToString() {
-        // TODO add spaced format
-        return $"[{url}] {name} {author}";
-    }  
+        var padded_name = pad('[' + name + ']', MINIMUM_NAME_LENGTH);
+        var padded_author = pad('"' + author + '"', MINIMUM_AUTHOR_LENGTH);
+        return $"{padded_name} {padded_author} {url}";
+    } 
 }
 

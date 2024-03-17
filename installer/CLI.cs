@@ -105,7 +105,6 @@ public class CLI {
             
             // progress with cursor move?
             string downloadURL = $"{FlameAPI.CF_MODS}/{id}/files/{modInfo.fileId}/download";
-            Console.WriteLine($"DOWNLOAD URL {downloadURL}");
             var timer = Stopwatch.StartNew();
             bool success = flameAPI.downloadFile(downloadURL, modInfo.fileName);
             if (success) {
