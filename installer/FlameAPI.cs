@@ -107,7 +107,6 @@ public class FlameAPI {
         
         // The endpoint is called with sorting by date which should fetch latest release? Needs checking
         if (modFiles.Count == 0) {
-            Console.WriteLine("No matching mod files were found for given ID");
             return ModFileInfo.NotFound();
         }
 
@@ -213,9 +212,18 @@ public struct Project {
             close_bracket = name.Length;
         }
 
-        string kind = name[(open_bracket+1)..close_bracket];
-        // if kind is given then they must be equal or it could be an issue
-        return string.Equals(kind, modLoader, StringComparison.InvariantCultureIgnoreCase);
+        string kind = name[(open_bracket+1)..close_bracket].ToLower();
+        switch (kind) {
+            case "fabric":
+                return string.Equals("fabric", modLoader, StringComparison.InvariantCultureIgnoreCase);
+            case "forge":
+                return string.Equals("forge", modLoader, StringComparison.InvariantCultureIgnoreCase);
+            case "neoforge":
+                return string.Equals("neoforge", modLoader, StringComparison.InvariantCultureIgnoreCase);
+            default:
+                // Dunno what it is, might be additional mod description
+                return true;
+        }
     }
 }
 

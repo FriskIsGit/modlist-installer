@@ -93,7 +93,7 @@ public class CLI {
                 case Result.SUCCESS:
                     break;
                 case Result.NOT_FOUND:
-                    Console.WriteLine($"Download URL not found. Was the mod released for {version}?");
+                    Console.WriteLine($"No valid mod file was found for version {version} [id:{id}]");
                     failures++;
                     continue;
                 case Result.TIMED_OUT:
@@ -108,7 +108,7 @@ public class CLI {
             bool success = flameAPI.downloadFile(downloadURL, modInfo.fileName);
             if (success) {
                 successes++;
-                Console.WriteLine($"Downloaded {modInfo.fileName} in {timer.Elapsed.Milliseconds}ms ({successes}/{mods.Count})");
+                Console.WriteLine($"({successes}/{mods.Count}) Downloaded {modInfo.fileName} in {timer.Elapsed.Milliseconds}ms ");
             } else {
                 failures++;
                 Console.WriteLine($"Failed on {modInfo.fileName}");
@@ -117,7 +117,6 @@ public class CLI {
         Console.WriteLine($"Failures: {failures}");
         Console.WriteLine($"Serializing cache of {modCache.size()} entries");
         modCache.serialize();
-
     }
 
     private static uint findModId(Mod mod, ModCache cache) {
@@ -169,7 +168,6 @@ public class CLI {
         List<Project> similarProjects = new();
         foreach (var proj in author.projects) {
             if (proj.name.StartsWith(modName) && proj.matchesKind(MODLOADER)) {
-                // it must not contain the MODLOADER
                 similarProjects.Add(proj);
             }
         }
