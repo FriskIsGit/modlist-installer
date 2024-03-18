@@ -1,4 +1,6 @@
 ﻿
+using System.Net;
+
 namespace modlist_installer.installer;
 
 class Program {
@@ -41,11 +43,22 @@ class Program {
 
                 CLI.displayAuthor(args[1]);
                 break;
-            case "test":
+            case "id":
+                if (args.Length == 1) {
+                    Console.WriteLine("Mod name required");
+                    return;
+                }
                 var flameApi = new FlameAPI();
-                var response = flameApi.fetchJson("https://www.curseforge.com/api/v1/mods/228895/files/2336727/download");
-                Console.WriteLine(response.statusCode);
-                
+                string url = SearchEngine.createSearchURL(args[1]);
+                Console.WriteLine($"URL: {url}");
+                var response = flameApi.fetchHtml(url);
+                if (response.statusCode != HttpStatusCode.OK) {
+                    Console.WriteLine(response.statusCode);
+                    return;
+                }
+
+                uint id = SearchEngine.scrapeProjectID(response.content);
+                Console.WriteLine($"Id: {id}");
                 break;
         }
         
@@ -61,5 +74,7 @@ class Program {
         Console.WriteLine("modlist install modlist.html <version>");
         Console.WriteLine("3. Fetch author by name, displaying their projects (CFWidget)");
         Console.WriteLine("modlist author <name>");
+        Console.WriteLine("4. Scrape mod id by name");
+        Console.WriteLine("modlist scrape_id <mod_name>");
     }
 }

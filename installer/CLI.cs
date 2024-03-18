@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Net;
 using WebScrapper.scrapper;
 
 namespace modlist_installer.installer;
@@ -66,26 +67,24 @@ public class CLI {
         Console.WriteLine($"Loaded cache size: {modCache.size()}");
         
         int failures = 0;
+        int successes = 0;
         for (int m = 0; m < mods.Count && m < LIMIT; m++) {
             var mod = mods[m];
             Console.WriteLine(mod);
-            uint id = modCache.get(mod.name);
-            
-
-            if (id == 0) {
-                if (mod.author.Length == 0) {
-                    Console.WriteLine("Author name is empty and mod has no known name-to-id mapping. Skipping!");
-                    continue;
-                }
-                id = reverseSearch(mod.name, mod.author);
-                if (id == 0) {
-                    failures += 1;
-                    Console.WriteLine($"Mod {mod} - cannot be downloaded, include its name in cache?");
-                    continue;
-                }
-                // Populate cache, TODO - cache every project that's retrieved for good measure
-                modCache.put(mod.name, id);
+            if (mod.name.Length == 0) {
+                Console.WriteLine("Mod has no name! Why?");
+                continue;
             }
+
+            uint id = findModId(mod, modCache);
+            if (id == 0) {
+                failures++;
+                Console.WriteLine("Mod really couldn't be found, does it even exist?");
+                continue;
+            }
+
+            // Populate cache, TODO - cache every project that's retrieved for good measure
+            modCache.put(mod.name, id);
             // Fill the field, could be useful
             mod.id = id;
             
@@ -94,12 +93,12 @@ public class CLI {
                 case Result.SUCCESS:
                     break;
                 case Result.NOT_FOUND:
-                    Console.WriteLine("Download URL not found, are you sure this mod was released for your version?");
-                    failures += 1;
+                    Console.WriteLine($"Download URL not found. Was the mod released for {version}?");
+                    failures++;
                     continue;
                 case Result.TIMED_OUT:
                     Console.WriteLine("Download timed out, likely because of too many releases.");
-                    failures += 1;
+                    failures++;
                     continue;
             }
             
@@ -108,7 +107,8 @@ public class CLI {
             var timer = Stopwatch.StartNew();
             bool success = flameAPI.downloadFile(downloadURL, modInfo.fileName);
             if (success) {
-                Console.WriteLine($"Downloaded {modInfo.fileName} in {timer.Elapsed.Milliseconds}ms");
+                successes++;
+                Console.WriteLine($"Downloaded {modInfo.fileName} in {timer.Elapsed.Milliseconds}ms ({successes}/{mods.Count})");
             } else {
                 failures++;
                 Console.WriteLine($"Failed on {modInfo.fileName}");
@@ -120,6 +120,39 @@ public class CLI {
 
     }
 
+    private static uint findModId(Mod mod, ModCache cache) {
+        uint id = cache.get(mod.name);
+        if (id != 0) {
+            return id;
+        }
+            
+        if (mod.author.Length == 0) {
+            Console.WriteLine("Author name is empty, has no known name-to-id mapping, falling back to scraping!");
+            string queryURL = SearchEngine.createSearchURL(mod.name);
+            var response = flameAPI.fetchHtml(queryURL);
+            if (response.statusCode != HttpStatusCode.OK) {
+                Console.WriteLine(response.statusCode);
+                return 0;
+            }
+            id = SearchEngine.scrapeProjectID(response.content);
+            return id;
+        }
+        id = reverseSearch(mod.name, mod.author);
+        if (id != 0) {
+            return id;
+        }
+        Console.WriteLine("Mod not found in cfwidget, falling back to scraping!");
+        string url = SearchEngine.createSearchURL(mod.name);
+        var resp = flameAPI.fetchHtml(url);
+        if (resp.statusCode != HttpStatusCode.OK) {
+            Console.WriteLine(resp.statusCode);
+            return 0;
+        }
+        id = SearchEngine.scrapeProjectID(resp.content);
+        return id;
+    }
+    
+    
     private static uint reverseSearch(string modName, string authorName) {
         ModAuthor? maybeAuthor = flameAPI.fetchAuthor(authorName);
         if (maybeAuthor == null) {

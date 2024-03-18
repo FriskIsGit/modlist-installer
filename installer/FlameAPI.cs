@@ -149,7 +149,7 @@ public class FlameAPI {
         getRequest.Headers.UserAgent.ParseAdd("Mozilla/5.0 Gecko/20100101");
         getRequest.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("text/html"));
         getRequest.Headers.AcceptLanguage.ParseAdd("en-US;q=0.7");
-        getRequest.Headers.Add("Cookie", $"__cf_bm={cfbmToken}");
+        // getRequest.Headers.Add("Cookie", $"__cf_bm={cfbmToken}");
         getRequest.Headers.Add("Set-GPC", "1");
         var response = client.Send(getRequest);
         HttpStatusCode code = response.StatusCode;
