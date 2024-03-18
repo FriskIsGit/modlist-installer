@@ -165,14 +165,29 @@ public class CLI {
             Console.WriteLine("It can be false according to trimming.");
             return 0;
         }
+
+        List<Project> similarProjects = new();
         foreach (var proj in author.projects) {
             if (proj.name.StartsWith(modName) && proj.matchesKind(MODLOADER)) {
                 // it must not contain the MODLOADER
-                return proj.id;
+                similarProjects.Add(proj);
             }
         }
 
-        return 0;
+        switch (similarProjects.Count) {
+            case 0:
+                return 0;
+            case 1:
+                return similarProjects[0].id;
+            default:
+                // Prioritize exact matches over order
+                foreach (var proj in similarProjects) {
+                    if (proj.name == modName) {
+                        return proj.id;
+                    }
+                }
+                return similarProjects[0].id;
+        }
     }
 
     public static void displayAuthor(string authorName) {
