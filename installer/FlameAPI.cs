@@ -1,25 +1,25 @@
 using System.Net;
 using System.Net.Http.Headers;
 using System.Text;
-using System.Text.Json;
 using System.Text.Json.Nodes;
-using System.Text.Json.Serialization;
 
 namespace modlist_installer.installer;
 
 public class FlameAPI {
     // CF API for acquiring files
     public const string CF_MODS = "https://www.curseforge.com/api/v1/mods";
+    public const string CF_MINECRAFT = "https://api.curseforge.com/v1/minecraft/version";
     private const string CF_WIDGET_AUTHOR = "https://api.cfwidget.com/author/search/";
     public const string CF_MC_MODS = "https://www.curseforge.com/minecraft/mc-mods/";
     
     private readonly HttpClient client = new();
     private string cfbmToken = "";
     private string version = "";
+    private uint versionId = 0;
 
     public FlameAPI() {
         // BaseAddress, Timeout, MaxResponseContentBufferSize are properties that cannot be modified..
-        client.Timeout = TimeSpan.FromSeconds(6);
+        client.Timeout = TimeSpan.FromSeconds(10);
     }
     
     public void setCloudflareToken(string token) {
@@ -28,8 +28,46 @@ public class FlameAPI {
     
     public void setMcVersion(string mc_version) {
         version = mc_version;
+        // the function below must not fail
+        versionId = fetchVersionId(mc_version);
+        Console.WriteLine($"gameVersionId: {versionId}");
     }
 
+    // Return 0 on failure
+    public uint fetchVersionId(string versionName) {
+        var response = fetchJson(CF_MINECRAFT);
+        if (response.statusCode != HttpStatusCode.OK) {
+            Console.WriteLine($"Status code: {response.statusCode}");
+            return 0;
+        }
+
+        var jsonObj = JsonNode.Parse(response.content);
+        if (jsonObj is null) {
+            return 0;
+        }
+
+        var minecraft_releases = jsonObj["data"]?.AsArray();
+        foreach (var release in minecraft_releases) {
+            if (release is null) 
+                continue;
+
+            var jsonVersion = release["versionString"];
+            if (jsonVersion is null) {
+                continue;
+            }
+            
+            if (jsonVersion.ToString() == versionName) {
+                var jsonId = release["gameVersionId"];
+                if (jsonId is null) {
+                    continue;
+                }
+                uint id = jsonId.GetValue<uint>();
+                return id;
+            }
+        }
+
+        throw new Exception($"gameVersionId wasn't found for given versionString: {versionName}");
+    }
     // Using CF WIDGET to acquire project ids by name
     public ModAuthor? fetchAuthor(string author) {
         string url = $"{CF_WIDGET_AUTHOR}{author}";
@@ -38,14 +76,15 @@ public class FlameAPI {
             Console.WriteLine($"Status code: {response.statusCode}");
             return null;
         }
-        return JsonSerializer.Deserialize<ModAuthor>(response.content);
+
+        return ModAuthor.Parse(response.content);
     }
 
-    private const uint PAGE_SIZE = 1000;
+    private const uint PAGE_SIZE = 10;
     // Fetching large pageSize because gameVersion parameter doesn't do anything conversely to what the documentation says
     // Returns empty string on failure
     public ModFileInfo fetchModFile(uint mod_id) {
-        string url = $"{CF_MODS}/{mod_id}/files?pageSize={PAGE_SIZE}&sort=dateCreated&sortDescending=true&removeAlphas=true";
+        string url = $"{CF_MODS}/{mod_id}/files?pageSize={PAGE_SIZE}&sort=dateCreated&sortDescending=true&gameVersionId={versionId}&removeAlphas=true";
 
         string content;
         try {
@@ -61,7 +100,7 @@ public class FlameAPI {
         }
         
         
-        JsonNode? jsonObj = JsonSerializer.Deserialize<JsonNode>(content);
+        var jsonObj = JsonNode.Parse(content);
         var files_array = jsonObj?["data"]?.AsArray();
         if (files_array is null) {
             return ModFileInfo.NotFound();
@@ -104,13 +143,9 @@ public class FlameAPI {
             var modInfo = new ModFileInfo(id, name, length, Result.SUCCESS);
             modFiles.Add(modInfo);
         }
-        
-        // The endpoint is called with sorting by date which should fetch latest release? Needs checking
-        if (modFiles.Count == 0) {
-            return ModFileInfo.NotFound();
-        }
 
-        return modFiles[0];
+        // The endpoint is called with sorting by date which should fetch latest release? Needs checking
+        return modFiles.Count == 0 ? ModFileInfo.NotFound() : modFiles[0];
     }
     
     
@@ -121,7 +156,7 @@ public class FlameAPI {
             webClient.DownloadFile(url, fileName);
             return true;
         }
-        catch (Exception e) {
+        catch (WebException e) {
             Console.WriteLine(e);
             return false;
         }
@@ -168,15 +203,58 @@ public struct SimpleResponse {
 }
 
 public struct ModAuthor {
+    private ModAuthor(uint id, string username, List<Project> projects) {
+        this.id = id;
+        this.username = username;
+        this.projects = projects;
+    }
+
     public uint id { get; set; }
     public string username { get; set; }
-    public Project[] projects { get; set; }
+    public List<Project> projects { get; set; }
+
+    public static ModAuthor? Parse(string json) {
+        var obj = JsonNode.Parse(json);
+        if (obj == null) {
+            return null;
+        }
+        uint id = obj["id"]?.GetValue<uint>() ?? 0;
+        string username = obj["username"]?.ToString() ?? "";
+        var jsonProjects = obj["projects"]?.AsArray();
+        
+        if (jsonProjects is null) {
+            // API must return an empty array [CS8602]
+            return new ModAuthor(id, username, new List<Project>());
+        }
+        var projects = new List<Project>(jsonProjects.Count);
+        foreach (var jsonProj in jsonProjects) {
+            if (jsonProj is null) {
+                continue;
+            }
+
+            var project = Project.Parse(jsonProj);
+            projects.Add(project);
+        }
+
+        return new ModAuthor(id, username, projects);
+    }
 }
 
 // sort of like Mods
 public struct Project {
     public uint id { get; set; }
     public string name { get; set; }
+
+    public static Project Parse(JsonNode json) {
+        uint id = json["id"]?.GetValue<uint>() ?? 0;
+        string name = json["name"]?.ToString() ?? "";
+        return new Project(id, name);
+    }
+
+    private Project(uint id, string name) {
+        this.id = id;
+        this.name = name;
+    }
 
     // since .NET 5
     public string convertToURL() {

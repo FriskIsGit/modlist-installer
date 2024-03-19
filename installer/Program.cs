@@ -75,6 +75,6 @@ class Program {
         Console.WriteLine("3. Fetch author by name, displaying their projects (CFWidget)");
         Console.WriteLine("modlist author <name>");
         Console.WriteLine("4. Scrape mod id by name");
-        Console.WriteLine("modlist scrape_id <mod_name>");
+        Console.WriteLine("modlist id <mod_name>");
     }
 }

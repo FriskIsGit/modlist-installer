@@ -119,6 +119,7 @@ public class CLI {
         modCache.serialize();
     }
 
+
     private static uint findModId(Mod mod, ModCache cache) {
         uint id = cache.get(mod.name);
         if (id != 0) {
@@ -158,13 +159,9 @@ public class CLI {
             Console.WriteLine("Author not found!");
             return 0;
         }
-
+        
         ModAuthor author = maybeAuthor.Value;
-        if (author.projects is null) {
-            Console.WriteLine("It can be false according to trimming.");
-            return 0;
-        }
-
+        
         List<Project> similarProjects = new();
         foreach (var proj in author.projects) {
             if (proj.name.StartsWith(modName) && proj.matchesKind(MODLOADER)) {
@@ -202,6 +199,6 @@ public class CLI {
             Console.WriteLine($"{proj.name} | {proj.id} | {proj.convertToURL()}");
         }
 
-        Console.WriteLine("Found " + author.projects.Length + " projects");
+        Console.WriteLine("Found " + author.projects.Count + " projects");
     }
 }

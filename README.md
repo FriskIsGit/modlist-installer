@@ -1,7 +1,8 @@
 ## Mod list installer
 Install mods listed in `modlist.html` </br>
 Written in .NET CORE
-The project contains 1 submodule - web scraper
+The project contains 1 submodule - web scraper </br>
+The implementation does not require or use an API token
 
 ## Cloning
 ```bash
