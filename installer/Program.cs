@@ -4,6 +4,7 @@ using System.Net;
 namespace modlist_installer.installer;
 
 class Program {
+    public static readonly string VERSION = "1.0.0";
     private static void Main(string[] args) {
         if (args.Length == 0) {
             PrintHelp();
@@ -33,7 +34,6 @@ class Program {
                         CLI.installMods(args[1], version);
                         return;
                 }
-
                 break;
             case "author":
                 if (args.Length == 1) {
@@ -60,8 +60,19 @@ class Program {
                 uint id = SearchEngine.scrapeProjectID(response.content, args[1]);
                 Console.WriteLine($"Id: {id}");
                 break;
+            default:
+                string arg0 = args[0];
+                if (arg0.StartsWith("-v") || arg0.StartsWith("--v")) {
+                    Console.WriteLine($"v{VERSION}");
+                    return;
+                }
+
+                if (arg0.StartsWith("-h") || arg0.StartsWith("--h")) {
+                    PrintHelp();
+                    return;
+                }
+                break;
         }
-        
     }
     
     private static void PrintHelp() {
