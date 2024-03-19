@@ -57,7 +57,7 @@ class Program {
                     return;
                 }
 
-                uint id = SearchEngine.scrapeProjectID(response.content);
+                uint id = SearchEngine.scrapeProjectID(response.content, args[1]);
                 Console.WriteLine($"Id: {id}");
                 break;
         }

@@ -24,7 +24,16 @@ public struct Mod {
     public string asListElement() {
         return $"<li><a href=\"{url}\">{name} (by {author})</a></li>";
     }
-    
+
+    public string getURLName() {
+        int lastSlash = url.LastIndexOf('/');
+        if (lastSlash == -1) {
+            return "";
+        }
+
+        return url[(lastSlash + 1)..];
+    }
+
     private static string extractAuthor(string modName) {
         var by = modName.IndexOf("by", StringComparison.InvariantCulture);
         if (by == -1) {

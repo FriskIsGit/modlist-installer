@@ -147,30 +147,23 @@ public class CLI {
         if (id != 0) {
             return id;
         }
-            
-        if (mod.author.Length == 0) {
-            Console.WriteLine("Author name is empty, has no known name-to-id mapping, falling back to scraping!");
-            string queryURL = SearchEngine.createSearchURL(mod.name);
-            var response = flameAPI.fetchHtml(queryURL);
-            if (response.statusCode != HttpStatusCode.OK) {
-                Console.WriteLine(response.statusCode);
-                return 0;
-            }
-            id = SearchEngine.scrapeProjectID(response.content);
-            return id;
+        
+        string urlName = mod.getURLName();
+        if (mod.author.Length != 0) {
+            id = reverseSearch(mod.name, mod.author);
         }
-        id = reverseSearch(mod.name, mod.author);
         if (id != 0) {
             return id;
         }
         Console.WriteLine("Mod not found in cfwidget, falling back to scraping!");
-        string url = SearchEngine.createSearchURL(mod.name);
+        string url = SearchEngine.createSearchURL(urlName);
+        // Console.WriteLine($"URL:{url}");
         var resp = flameAPI.fetchHtml(url);
         if (resp.statusCode != HttpStatusCode.OK) {
             Console.WriteLine(resp.statusCode);
             return 0;
         }
-        id = SearchEngine.scrapeProjectID(resp.content);
+        id = SearchEngine.scrapeProjectID(resp.content, urlName);
         return id;
     }
     

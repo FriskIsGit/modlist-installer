@@ -13,12 +13,15 @@ public class FlameAPI {
     public const string CF_MC_MODS = "https://www.curseforge.com/minecraft/mc-mods/";
     
     private readonly HttpClient client = new();
+    private readonly WebClient webClient = new();
     private string cfbmToken = "";
     private Version version;
 
     public FlameAPI() {
         // BaseAddress, Timeout, MaxResponseContentBufferSize are properties that cannot be modified..
         client.Timeout = TimeSpan.FromSeconds(10);
+        // this header is necessary
+        webClient.Headers.Add("User-Agent", "Mozilla/5.0 Gecko/20100101");
     }
     
     public void setCloudflareToken(string token) {
@@ -155,10 +158,6 @@ public class FlameAPI {
     
     
     public bool downloadFile(string url, string fileName) {
-        // the async version with HttpClient didn't quite work so idk
-        var webClient = new WebClient();
-        // this header is necessary
-        webClient.Headers.Add("User-Agent", "Mozilla/5.0 Gecko/20100101");
         try {
             webClient.DownloadFile(url, fileName);
             return true;
