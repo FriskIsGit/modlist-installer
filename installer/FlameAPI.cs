@@ -14,8 +14,7 @@ public class FlameAPI {
     
     private readonly HttpClient client = new();
     private string cfbmToken = "";
-    private string version = "";
-    private uint versionId = 0;
+    private Version version;
 
     public FlameAPI() {
         // BaseAddress, Timeout, MaxResponseContentBufferSize are properties that cannot be modified..
@@ -27,26 +26,32 @@ public class FlameAPI {
     }
     
     public void setMcVersion(string mc_version) {
-        version = mc_version;
         // the function below must not fail
-        versionId = fetchVersionId(mc_version);
-        Console.WriteLine($"gameVersionId: {versionId}");
+        version = fetchVersion(mc_version);
+        Console.WriteLine($"gameVersionId: {version.versionId}; baseVersionId: {version.baseVersionId}");
     }
 
     // Return 0 on failure
-    public uint fetchVersionId(string versionName) {
+    public Version fetchVersion(string versionName) {
         var response = fetchJson(CF_MINECRAFT);
         if (response.statusCode != HttpStatusCode.OK) {
             Console.WriteLine($"Status code: {response.statusCode}");
-            return 0;
+            throw new Exception("Cannot access versions endpoints");
         }
 
         var jsonObj = JsonNode.Parse(response.content);
         if (jsonObj is null) {
-            return 0;
+            throw new NullReferenceException("Rare: Content is null");
+        }
+        var minecraft_releases = jsonObj["data"]?.AsArray();
+        if (minecraft_releases is null) {
+            throw new NullReferenceException("Rare: data releases is null");
         }
 
-        var minecraft_releases = jsonObj["data"]?.AsArray();
+        string baseVersion = Version.getBaseVersion(versionName);
+
+        uint versionId = 0;
+        uint baseVersionId = 0;
         foreach (var release in minecraft_releases) {
             if (release is null) 
                 continue;
@@ -55,18 +60,28 @@ public class FlameAPI {
             if (jsonVersion is null) {
                 continue;
             }
-            
-            if (jsonVersion.ToString() == versionName) {
+
+            string releaseVersion = jsonVersion.ToString();
+            if (releaseVersion == versionName) {
                 var jsonId = release["gameVersionId"];
                 if (jsonId is null) {
                     continue;
                 }
-                uint id = jsonId.GetValue<uint>();
-                return id;
+                versionId = jsonId.GetValue<uint>();
+            } else if (releaseVersion == baseVersion) {
+                var jsonId = release["gameVersionId"];
+                if (jsonId is null) {
+                    continue;
+                }
+                baseVersionId = jsonId.GetValue<uint>();
             }
         }
 
-        throw new Exception($"gameVersionId wasn't found for given versionString: {versionName}");
+        if (versionId == 0) {
+            throw new Exception($"gameVersionId wasn't found for given versionString: {versionName}");
+        }
+
+        return new Version(versionId, baseVersionId);
     }
     // Using CF WIDGET to acquire project ids by name
     public ModAuthor? fetchAuthor(string author) {
@@ -80,11 +95,15 @@ public class FlameAPI {
         return ModAuthor.Parse(response.content);
     }
 
-    private const uint PAGE_SIZE = 10;
-    // Fetching large pageSize because gameVersion parameter doesn't do anything conversely to what the documentation says
-    // Returns empty string on failure
+    private const uint PAGE_SIZE = 5;
+
     public ModFileInfo fetchModFile(uint mod_id) {
-        string url = $"{CF_MODS}/{mod_id}/files?pageSize={PAGE_SIZE}&sort=dateCreated&sortDescending=true&gameVersionId={versionId}&removeAlphas=true";
+        return fetchModFile(mod_id, true);
+    }
+
+    private ModFileInfo fetchModFile(uint mod_id, bool firstAttempt) {
+        uint gameVersion = firstAttempt ? version.versionId : version.baseVersionId;
+        string url = $"{CF_MODS}/{mod_id}/files?pageSize={PAGE_SIZE}&sort=dateCreated&sortDescending=true&gameVersionId={gameVersion}&removeAlphas=true";
 
         string content;
         try {
@@ -106,51 +125,39 @@ public class FlameAPI {
             return ModFileInfo.NotFound();
         }
 
-        var modFiles = new List<ModFileInfo>();
-        // Select all matching versions
-        foreach (var modInfoElement in files_array) {
-            if (modInfoElement is null) 
-                continue;
-            
-            var versionArray = modInfoElement["gameVersions"]?.AsArray();
-            if (versionArray is null) 
-                continue;
-
-            bool foundMatch = false;
-            foreach (var a_version in versionArray) {
-                if (a_version == null) {
-                    continue;
-                }
-                var parsed_version = a_version.GetValue<string>();
-                if (version.StartsWith(parsed_version)) {
-                    foundMatch = true;
-                    break;
-                }
+        if (files_array.Count == 0) {
+            if (!firstAttempt || version.isBaseVersion) {
+                return ModFileInfo.NotFound();
             }
-            if (!foundMatch) 
-                continue;
             
-            var lengthNode = modInfoElement["fileLength"];
-            var nameNode = modInfoElement["fileName"];
-            var idNode = modInfoElement["id"];
-            if (lengthNode is null || nameNode is null || idNode is null)
-                continue;
-            
-            var id = uint.Parse(idNode.ToString());
-            var name = nameNode.ToString();
-            var length = uint.Parse(lengthNode.ToString());
-            
-            var modInfo = new ModFileInfo(id, name, length, Result.SUCCESS);
-            modFiles.Add(modInfo);
+            // recursive call to attempt to retrieve by base version id, shouldn't happen often
+            Console.WriteLine("Not found, falling back to the base version of the mod");
+            return fetchModFile(mod_id, false);
         }
 
-        // The endpoint is called with sorting by date which should fetch latest release? Needs checking
-        return modFiles.Count == 0 ? ModFileInfo.NotFound() : modFiles[0];
+        var latestMod = files_array[0];
+        if (latestMod is null) {
+            return ModFileInfo.Unknown();
+        }
+        
+        var lengthNode = latestMod["fileLength"];
+        var nameNode = latestMod["fileName"];
+        var idNode = latestMod["id"];
+        if (lengthNode is null || nameNode is null || idNode is null)
+            return ModFileInfo.Unknown();
+            
+        var id = uint.Parse(idNode.ToString());
+        var name = nameNode.ToString();
+        var length = uint.Parse(lengthNode.ToString());
+            
+        return new ModFileInfo(id, name, length, Result.SUCCESS);
     }
     
     
     public bool downloadFile(string url, string fileName) {
+        // the async version with HttpClient didn't quite work so idk
         var webClient = new WebClient();
+        // this header is necessary
         webClient.Headers.Add("User-Agent", "Mozilla/5.0 Gecko/20100101");
         try {
             webClient.DownloadFile(url, fileName);
@@ -335,4 +342,21 @@ public struct ModFileInfo {
 
 public enum Result {
     SUCCESS, TIMED_OUT, NOT_FOUND, UNKNOWN
+}
+
+public struct Version {
+    public readonly uint versionId;
+    public readonly uint baseVersionId;
+    public readonly bool isBaseVersion;
+
+    public Version(uint versionId, uint baseVersionId) {
+        this.versionId = versionId;
+        this.baseVersionId = baseVersionId;
+        isBaseVersion = versionId == baseVersionId;
+    }
+
+    public static string getBaseVersion(string version) {
+        int lastDot = version.LastIndexOf('.');
+        return lastDot == -1 ? "" : version[..lastDot];
+    }
 }

@@ -21,6 +21,10 @@ public struct Mod {
         author = extractAuthor(description);
     }
 
+    public string asListElement() {
+        return $"<li><a href=\"{url}\">{name} (by {author})</a></li>";
+    }
+    
     private static string extractAuthor(string modName) {
         var by = modName.IndexOf("by", StringComparison.InvariantCulture);
         if (by == -1) {

@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Net;
+using System.Text;
 using WebScrapper.scrapper;
 
 namespace modlist_installer.installer;
@@ -7,6 +8,7 @@ namespace modlist_installer.installer;
 public class CLI {
     // MAKE MOD LOADER AN ARGUMENT
     private const string MODLOADER = "Forge";
+    private const string FAILED_PATH = "failed.html";
     private static FlameAPI flameAPI = new ();
 
     public static void displayMods(string path) {
@@ -66,8 +68,8 @@ public class CLI {
         var modCache = ModCache.load();
         Console.WriteLine($"Loaded cache size: {modCache.size()}");
         
-        int failures = 0;
         int successes = 0;
+        var failed = new List<Mod>();
         for (int m = 0; m < mods.Count && m < LIMIT; m++) {
             var mod = mods[m];
             Console.WriteLine(mod);
@@ -78,7 +80,7 @@ public class CLI {
 
             uint id = findModId(mod, modCache);
             if (id == 0) {
-                failures++;
+                failed.Add(mod);
                 Console.WriteLine("Mod really couldn't be found, does it even exist?");
                 continue;
             }
@@ -94,11 +96,15 @@ public class CLI {
                     break;
                 case Result.NOT_FOUND:
                     Console.WriteLine($"No valid mod file was found for version {version} [id:{id}]");
-                    failures++;
+                    failed.Add(mod);
                     continue;
                 case Result.TIMED_OUT:
                     Console.WriteLine("Download timed out, likely because of too many releases.");
-                    failures++;
+                    failed.Add(mod);
+                    continue;
+                case Result.UNKNOWN:
+                    Console.WriteLine("Unexpected error");
+                    failed.Add(mod);
                     continue;
             }
             
@@ -110,13 +116,29 @@ public class CLI {
                 successes++;
                 Console.WriteLine($"({successes}/{mods.Count}) Downloaded {modInfo.fileName} in {timer.Elapsed.Milliseconds}ms ");
             } else {
-                failures++;
+                failed.Add(mod);
                 Console.WriteLine($"Failed on {modInfo.fileName}");
             }
         }
-        Console.WriteLine($"Failures: {failures}");
+        Console.WriteLine($"Writing {failed.Count} failed downloads to {FAILED_PATH}");
+        if (mods.Count > 0) {
+            writeFailedMods(failed);
+        }
         Console.WriteLine($"Serializing cache of {modCache.size()} entries");
         modCache.serialize();
+    }
+
+    private static void writeFailedMods(List<Mod> mods) {
+        using var file = File.Create(FAILED_PATH);
+        using var stream = new BufferedStream(file);
+        stream.Write("<ul>"u8);
+        stream.Write(Encoding.ASCII.GetBytes(Environment.NewLine));
+        foreach (var mod in mods) {
+            byte[] bytes = Encoding.UTF8.GetBytes(mod.asListElement());
+            stream.Write(bytes);
+            stream.Write(Encoding.ASCII.GetBytes(Environment.NewLine));
+        }
+        stream.Write("</ul>"u8);
     }
 
 
