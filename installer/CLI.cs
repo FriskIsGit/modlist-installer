@@ -130,7 +130,7 @@ public class CLI {
         modCache.serialize();
     }
 
-    private static void writeModsToFile(List<Mod> mods, string path) {
+    private static void writeModsToFile(IEnumerable<Mod> mods, string path) {
         using var file = File.Create(path);
         using var stream = new BufferedStream(file);
         stream.Write("<ul>"u8);
@@ -154,25 +154,17 @@ public class CLI {
             Console.WriteLine("No mods contained in 2nd list");
             return;
         }
+        
+        var modSet1 = mods1.ToHashSet();
+        var modSet2 = mods2.ToHashSet();
 
-        int mostModsCount = Math.Max(mods1.Count, mods2.Count);
-        var modSet = new HashSet<string>(Math.Max(16, mostModsCount));
-        List<Mod> nonDuplicates = new List<Mod>();
-        foreach (var mod in mods1) {
-            modSet.Add(mod.name);
-        }
-        foreach (var mod in mods2) {
-            if (modSet.Add(mod.name)) {
-                nonDuplicates.Add(mod);
-            }
-        }
-
-        if (nonDuplicates.Count == 0) {
+        modSet1.SymmetricExceptWith(modSet2);
+        if (!modSet1.Any()) {
             Console.WriteLine("No differences found!");
             return;
         }
-        Console.WriteLine($"{nonDuplicates.Count} differences found. Writing to diff.html");
-        writeModsToFile(nonDuplicates, "diff.html");
+        Console.WriteLine($"{modSet1.Count} differences found. Writing to diff.html");
+        writeModsToFile(modSet1, "diff.html");
     }
 
     private static uint findModId(Mod mod, ModCache cache) {
