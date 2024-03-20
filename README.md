@@ -18,3 +18,6 @@ git clone --recurse-submodules https://github.com/FriskIsGit/modlist-installer
 `mod.cache` - mod names to ids mappings </br>
 `failed.html` - html-formatted mods that failed to download </br>
 `release_win.bat` - command to release the app as standalone and trim
+
+## TODO
+Support old url format

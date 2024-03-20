@@ -60,6 +60,13 @@ class Program {
                 uint id = SearchEngine.scrapeProjectID(response.content, args[1]);
                 Console.WriteLine($"Id: {id}");
                 break;
+            case "diff":
+                if (args.Length < 3) {
+                    Console.WriteLine("Two mod lists must be specified");
+                    return;
+                }
+                CLI.createModDifference(args[1], args[2]);
+                break;
             default:
                 string arg0 = args[0];
                 if (arg0.StartsWith("-v") || arg0.StartsWith("--v")) {
@@ -80,12 +87,14 @@ class Program {
         Console.WriteLine("---- Usage ----");
         
         Console.WriteLine("1. Enumerate the list of mods (OFFLINE).");
-        Console.WriteLine("modlist show modlist.html");
+        Console.WriteLine("modlist show <modlist.html>");
         Console.WriteLine("2. Install specified modlist (CF) targeting the latest release of specified version");
-        Console.WriteLine("modlist install modlist.html <version>");
+        Console.WriteLine("modlist install <modlist.html> <version>");
         Console.WriteLine("3. Fetch author by name, displaying their projects (CFWidget)");
         Console.WriteLine("modlist author <name>");
-        Console.WriteLine("4. Scrape mod id by name");
+        Console.WriteLine("4. Generate a modlist that's the difference of two mod lists (OFFLINE)");
+        Console.WriteLine("modlist diff <list1.html> <list2.html>");
+        Console.WriteLine("5. Scrape mod id by name");
         Console.WriteLine("modlist id <mod_name>");
     }
 }

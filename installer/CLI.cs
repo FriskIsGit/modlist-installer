@@ -49,14 +49,16 @@ public class CLI {
     }
 
     // const to limit the input size for testing purposes
-    private const int LIMIT = 500;
+    private const int LIMIT = 5000;
     /// <summary>
-    /// Steps taken: <br/>
+    /// Functionality overview: <br/>
     /// 1. Parse mods from modlist.html <br/>
-    /// 2. Attempt to use mod_name to mod_id cache if successful skip step 3. and step 4 <br/>
+    /// 2. Attempt to use mod_name to mod_id cache if successful skip steps: 3, 4 and 5 <br/>
     /// 3. Retrieve mod authors <br/>
-    /// 4. Search for mod id by name in author's projects <br/>
-    /// 5. Call CF mods/{mod_id}/files endpoint with mod id and search for user's desired version, selecting latest release <br/>
+    /// 4. Search for project ID by name in author's projects <br/>
+    /// 5. If unsuccessful attempt to scrape the ID from search engines using a crafted query <br/>
+    /// 6. Call CF mods/{mod_id}/files endpoint with mod_id and gameVersionId, selecting latest release <br/>
+    /// 7. Serialize all failed mods to a separate modlist <br/>
     /// </summary>
     public static void installMods(string path, string version) {
         flameAPI.setMcVersion(version);
@@ -122,14 +124,14 @@ public class CLI {
         }
         Console.WriteLine($"Writing {failed.Count} failed downloads to {FAILED_PATH}");
         if (mods.Count > 0) {
-            writeFailedMods(failed);
+            writeModsToFile(failed, FAILED_PATH);
         }
         Console.WriteLine($"Serializing cache of {modCache.size()} entries");
         modCache.serialize();
     }
 
-    private static void writeFailedMods(List<Mod> mods) {
-        using var file = File.Create(FAILED_PATH);
+    private static void writeModsToFile(List<Mod> mods, string path) {
+        using var file = File.Create(path);
         using var stream = new BufferedStream(file);
         stream.Write("<ul>"u8);
         stream.Write(Encoding.ASCII.GetBytes(Environment.NewLine));
@@ -140,7 +142,38 @@ public class CLI {
         }
         stream.Write("</ul>"u8);
     }
+    
+    public static void createModDifference(string path1, string path2) {
+        List<Mod> mods1 = parseMods(path1);
+        if (mods1.Count == 0) {
+            Console.WriteLine("No mods contained in 1st list");
+            return;
+        }
+        List<Mod> mods2 = parseMods(path2);
+        if (mods2.Count == 0) {
+            Console.WriteLine("No mods contained in 2nd list");
+            return;
+        }
 
+        int mostModsCount = Math.Max(mods1.Count, mods2.Count);
+        var modSet = new HashSet<string>(Math.Max(16, mostModsCount));
+        List<Mod> nonDuplicates = new List<Mod>();
+        foreach (var mod in mods1) {
+            modSet.Add(mod.name);
+        }
+        foreach (var mod in mods2) {
+            if (modSet.Add(mod.name)) {
+                nonDuplicates.Add(mod);
+            }
+        }
+
+        if (nonDuplicates.Count == 0) {
+            Console.WriteLine("No differences found!");
+            return;
+        }
+        Console.WriteLine($"{nonDuplicates.Count} differences found. Writing to diff.html");
+        writeModsToFile(nonDuplicates, "diff.html");
+    }
 
     private static uint findModId(Mod mod, ModCache cache) {
         uint id = cache.get(mod.name);
