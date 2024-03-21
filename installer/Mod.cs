@@ -25,12 +25,11 @@ public struct Mod {
         return $"<li><a href=\"{url}\">{name} (by {author})</a></li>";
     }
 
-    public string getURLName() {
+    public string getUrlEnd() {
         int lastSlash = url.LastIndexOf('/');
         if (lastSlash == -1) {
             return "";
         }
-
         return url[(lastSlash + 1)..];
     }
 

@@ -9,7 +9,7 @@ public class CLI {
     // MAKE MOD LOADER AN ARGUMENT
     private const string MODLOADER = "Forge";
     private const string FAILED_PATH = "failed.html";
-    private static FlameAPI flameAPI = new ();
+    private static FlameAPI flameAPI = new();
 
     public static void displayMods(string path) {
         Console.WriteLine("Parsing mods..");
@@ -17,6 +17,7 @@ public class CLI {
         if (mods.Count == 0) {
             return;
         }
+
         foreach (var mod in mods) {
             Console.WriteLine(mod);
         }
@@ -33,15 +34,32 @@ public class CLI {
         string contents = File.ReadAllText(path);
         HtmlDoc html = new(contents);
         List<Tag> anchors = html.FindAll("a");
+        if (anchors.Count == 0) {
+            return new List<Mod>();
+        }
+
         List<Mod> mods = new List<Mod>(anchors.Count);
         foreach (var anchor in anchors) {
             foreach (var (key, link) in anchor.Attributes) {
                 if (key != "href")
                     continue;
 
-                string name = html.ExtractText(anchor);
-                var mod = new Mod(name, link);
-                mods.Add(mod);
+                if (link.Contains("minecraft.curseforge")) {
+                    string description = html.ExtractText(anchor);
+                    var mod = new Mod(description, link);
+                    // fill the id field since we're given it
+                    string numerical_id = mod.getUrlEnd();
+                    try {
+                        mod.id = uint.Parse(numerical_id);
+                    }
+                    catch (Exception) { }
+                    mods.Add(mod);
+                }
+                else {
+                    // assume it's the new format
+                    string desc = html.ExtractText(anchor);
+                    mods.Add(new Mod(desc, link));
+                }
             }
         }
 
@@ -50,6 +68,7 @@ public class CLI {
 
     // const to limit the input size for testing purposes
     private const int LIMIT = 5000;
+
     /// <summary>
     /// Functionality overview: <br/>
     /// 1. Parse mods from modlist.html <br/>
@@ -66,19 +85,16 @@ public class CLI {
         if (mods.Count == 0) {
             return;
         }
+
         Console.WriteLine($"Mods parsed: {mods.Count}");
         var modCache = ModCache.load();
         Console.WriteLine($"Loaded cache size: {modCache.size()}");
-        
+
         int successes = 0;
         var failed = new List<Mod>();
         for (int m = 0; m < mods.Count && m < LIMIT; m++) {
             var mod = mods[m];
             Console.WriteLine(mod);
-            if (mod.name.Length == 0) {
-                Console.WriteLine("Mod has no name! Why?");
-                continue;
-            }
 
             uint id = findModId(mod, modCache);
             if (id == 0) {
@@ -89,9 +105,7 @@ public class CLI {
 
             // Populate cache, TODO - cache every project that's retrieved for good measure
             modCache.put(mod.name, id);
-            // Fill the field, could be useful
-            mod.id = id;
-            
+
             ModFileInfo modInfo = flameAPI.fetchModFile(id);
             switch (modInfo.result) {
                 case Result.SUCCESS:
@@ -109,23 +123,27 @@ public class CLI {
                     failed.Add(mod);
                     continue;
             }
-            
+
             // progress with cursor move?
             string downloadURL = $"{FlameAPI.CF_MODS}/{id}/files/{modInfo.fileId}/download";
             var timer = Stopwatch.StartNew();
             bool success = flameAPI.downloadFile(downloadURL, modInfo.fileName);
             if (success) {
                 successes++;
-                Console.WriteLine($"({successes}/{mods.Count}) Downloaded {modInfo.fileName} in {timer.Elapsed.Milliseconds}ms ");
-            } else {
+                Console.WriteLine(
+                    $"({successes}/{mods.Count}) Downloaded {modInfo.fileName} in {timer.Elapsed.Milliseconds}ms ");
+            }
+            else {
                 failed.Add(mod);
                 Console.WriteLine($"Failed on {modInfo.fileName}");
             }
         }
+
         Console.WriteLine($"Writing {failed.Count} failed downloads to {FAILED_PATH}");
         if (mods.Count > 0) {
             writeModsToFile(failed, FAILED_PATH);
         }
+
         Console.WriteLine($"Serializing cache of {modCache.size()} entries");
         modCache.serialize();
     }
@@ -140,21 +158,23 @@ public class CLI {
             stream.Write(bytes);
             stream.Write(Encoding.ASCII.GetBytes(Environment.NewLine));
         }
+
         stream.Write("</ul>"u8);
     }
-    
+
     public static void createModDifference(string path1, string path2) {
         List<Mod> mods1 = parseMods(path1);
         if (mods1.Count == 0) {
             Console.WriteLine("No mods contained in 1st list");
             return;
         }
+
         List<Mod> mods2 = parseMods(path2);
         if (mods2.Count == 0) {
             Console.WriteLine("No mods contained in 2nd list");
             return;
         }
-        
+
         var modSet1 = mods1.ToHashSet();
         var modSet2 = mods2.ToHashSet();
 
@@ -163,23 +183,30 @@ public class CLI {
             Console.WriteLine("No differences found!");
             return;
         }
+
         Console.WriteLine($"{modSet1.Count} differences found. Writing to diff.html");
         writeModsToFile(modSet1, "diff.html");
     }
 
     private static uint findModId(Mod mod, ModCache cache) {
+        if (mod.id != 0) {
+            return mod.id;
+        }
+
         uint id = cache.get(mod.name);
         if (id != 0) {
             return id;
         }
-        
-        string urlName = mod.getURLName();
+
+        string urlName = mod.getUrlEnd();
         if (mod.author.Length != 0) {
             id = reverseSearch(mod.name, mod.author);
         }
+
         if (id != 0) {
             return id;
         }
+
         Console.WriteLine("Mod not found in cfwidget, falling back to scraping!");
         string url = SearchEngine.createSearchURL(urlName);
         // Console.WriteLine($"URL:{url}");
@@ -188,20 +215,21 @@ public class CLI {
             Console.WriteLine(resp.statusCode);
             return 0;
         }
+
         id = SearchEngine.scrapeProjectID(resp.content, urlName);
         return id;
     }
-    
-    
+
+
     private static uint reverseSearch(string modName, string authorName) {
         ModAuthor? maybeAuthor = flameAPI.fetchAuthor(authorName);
         if (maybeAuthor == null) {
             Console.WriteLine("Author not found!");
             return 0;
         }
-        
+
         ModAuthor author = maybeAuthor.Value;
-        
+
         List<Project> similarProjects = new();
         foreach (var proj in author.projects) {
             if (proj.name.StartsWith(modName) && proj.matchesKind(MODLOADER)) {
@@ -221,6 +249,7 @@ public class CLI {
                         return proj.id;
                     }
                 }
+
                 return similarProjects[0].id;
         }
     }
