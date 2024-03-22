@@ -148,7 +148,7 @@ public class CLI {
         modCache.serialize();
     }
 
-    private static void writeModsToFile(IEnumerable<Mod> mods, string path) {
+    private static void writeModsToFile(List<Mod> mods, string path) {
         using var file = File.Create(path);
         using var stream = new BufferedStream(file);
         stream.Write("<ul>"u8);
@@ -168,24 +168,42 @@ public class CLI {
             Console.WriteLine("No mods contained in 1st list");
             return;
         }
-
+        
         List<Mod> mods2 = parseMods(path2);
         if (mods2.Count == 0) {
             Console.WriteLine("No mods contained in 2nd list");
             return;
         }
+        
+        var modSet1 = new HashSet<string>(mods1.Count);
+        var modSet2 = new HashSet<string>(mods2.Count);
 
-        var modSet1 = mods1.ToHashSet();
-        var modSet2 = mods2.ToHashSet();
-
+        foreach (var mod in mods1) 
+            modSet1.Add(mod.name);
+        foreach (var mod in mods2) 
+            modSet2.Add(mod.name);
+        
         modSet1.SymmetricExceptWith(modSet2);
+        Console.WriteLine($"Compared by name {mods1.Count} mods with {mods2.Count}");
         if (!modSet1.Any()) {
             Console.WriteLine("No differences found!");
             return;
         }
+        
+        Console.WriteLine($"{modSet1.Count} differences found. Preparing diff.html");
+        // Create a common HashMap
+        var namesToMods = new Dictionary<string, Mod>();
 
-        Console.WriteLine($"{modSet1.Count} differences found. Writing to diff.html");
-        writeModsToFile(modSet1, "diff.html");
+        foreach (var mod in mods1)
+            namesToMods[mod.name] = mod;
+        foreach (var mod in mods2) 
+            namesToMods[mod.name] = mod;
+
+        List<Mod> differentMods = new List<Mod>(modSet1.Count);
+        foreach (var name in modSet1) {
+            differentMods.Add(namesToMods[name]);
+        }
+        writeModsToFile(differentMods, "diff.html");
     }
 
     private static uint findModId(Mod mod, ModCache cache) {
