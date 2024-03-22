@@ -103,8 +103,10 @@ public class CLI {
                 continue;
             }
 
-            // Populate cache
-            modCache.put(mod.getUrlEnd(), id);
+            // Populate cache if url is not in old format
+            if (mod.id == 0) {
+                modCache.put(mod.getUrlEnd(), id);
+            }
 
             ModFileInfo modInfo = flameAPI.fetchModFile(id);
             switch (modInfo.result) {

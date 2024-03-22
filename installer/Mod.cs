@@ -6,7 +6,7 @@ public struct Mod {
     public readonly string name;
     public readonly string url;
     public readonly string author;
-    // id by default zero - not fetched
+    // set to 0 for named urls, set to mod id for old urls
     public uint id = 0;
     
     
