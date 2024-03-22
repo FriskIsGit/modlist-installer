@@ -103,8 +103,8 @@ public class CLI {
                 continue;
             }
 
-            // Populate cache, TODO - cache every project that's retrieved for good measure
-            modCache.put(mod.name, id);
+            // Populate cache
+            modCache.put(mod.getUrlEnd(), id);
 
             ModFileInfo modInfo = flameAPI.fetchModFile(id);
             switch (modInfo.result) {
@@ -123,8 +123,7 @@ public class CLI {
                     failed.Add(mod);
                     continue;
             }
-
-            // progress with cursor move?
+            
             string downloadURL = $"{FlameAPI.CF_MODS}/{id}/files/{modInfo.fileId}/download";
             var timer = Stopwatch.StartNew();
             bool success = flameAPI.downloadFile(downloadURL, modInfo.fileName);
@@ -211,12 +210,12 @@ public class CLI {
             return mod.id;
         }
 
-        uint id = cache.get(mod.name);
+        string urlName = mod.getUrlEnd();
+        uint id = cache.get(urlName);
         if (id != 0) {
             return id;
         }
 
-        string urlName = mod.getUrlEnd();
         if (mod.author.Length != 0) {
             id = reverseSearch(mod.name, mod.author);
         }

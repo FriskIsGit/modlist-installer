@@ -4,8 +4,7 @@ using System.Text;
 namespace modlist_installer.installer;
 
 /// <summary>
-/// Storage for mapping mod names to ids. There seems to be no direct API call to retrieve mod id by name.
-/// Mod ids are instead retrieved by looking through author's mods thanks to https://cfwidget.com/
+/// Storage for mapping mod url names to ids. There seems to be no direct API call to retrieve mod id by name.
 /// </summary>
 public class ModCache {
     private const string CACHE_PATH = "mod.cache";
@@ -65,19 +64,19 @@ public class ModCache {
         return mods.Count;
     }
     
-    public void put(string name, uint id) {
-        if (name.Length == 0) {
+    public void put(string urlName, uint id) {
+        if (urlName.Length == 0) {
             return;
         }
-        mods[name] = id;
+        mods[urlName] = id;
     }
     
-    public uint get(string name) {
-        if (name.Length == 0) {
+    public uint get(string urlName) {
+        if (urlName.Length == 0) {
             return 0;
         }
         uint id;
-        if (mods.TryGetValue(name, out id)) {
+        if (mods.TryGetValue(urlName, out id)) {
             return id;
         }
         return 0;
