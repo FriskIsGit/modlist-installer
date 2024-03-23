@@ -1,5 +1,5 @@
 ## Mod list installer
-Install minecraft mods listed in `modlist.html` </br>
+Install minecraft mods listed in `modlist.html` or `manifest.json` </br>
 
 
 <b>The project:

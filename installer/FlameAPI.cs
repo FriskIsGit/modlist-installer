@@ -13,28 +13,20 @@ public class FlameAPI {
     public const string CF_MC_MODS = "https://www.curseforge.com/minecraft/mc-mods/";
     
     private readonly HttpClient client = new();
-    private readonly WebClient webClient = new();
-    private string cfbmToken = "";
     private Version version;
 
     public FlameAPI() {
         // BaseAddress, Timeout, MaxResponseContentBufferSize are properties that cannot be modified..
-        client.Timeout = TimeSpan.FromSeconds(10);
-        // this header is necessary
-        webClient.Headers.Add("User-Agent", "Mozilla/5.0 Gecko/20100101");
+        client.Timeout = Timeout.InfiniteTimeSpan;
+        //client.Timeout = TimeSpan.FromSeconds(300);
     }
-    
-    public void setCloudflareToken(string token) {
-        cfbmToken = token;
-    }
-    
+
     public void setMcVersion(string mc_version) {
         // the function below must not fail
         version = fetchVersion(mc_version);
         Console.WriteLine($"gameVersionId: {version.versionId}; baseVersionId: {version.baseVersionId}");
     }
 
-    // Return 0 on failure
     public Version fetchVersion(string versionName) {
         var response = fetchJson(CF_MINECRAFT);
         if (response.statusCode != HttpStatusCode.OK) {
@@ -155,19 +147,54 @@ public class FlameAPI {
             
         return new ModFileInfo(id, name, length, Result.SUCCESS);
     }
-    
-    
-    public bool downloadFile(string url, string fileName) {
+
+    public List<Dependency> _fetchDependencies(uint modId) {
+        string url = $"{CF_MODS}/{modId}/dependencies?index=0&pageSize=20";
+        string content;
         try {
-            webClient.DownloadFile(url, fileName);
-            return true;
+            var response = fetchJson(url);
+            if (response.statusCode != HttpStatusCode.OK) {
+                Console.WriteLine($"Status code: {response.statusCode}");
+                return new List<Dependency>();
+            }
+            content = response.content;
+        } catch (Exception e) {
+            Console.WriteLine(e.Message);
+            return new List<Dependency>();
         }
-        catch (WebException e) {
-            Console.WriteLine(e);
-            return false;
+        
+        var jsonObj = JsonNode.Parse(content);
+        var dependenciesArr = jsonObj?["data"]?.AsArray();
+        if (dependenciesArr is null) {
+            return new List<Dependency>();
         }
+        
+        return new List<Dependency>();
     }
     
+    
+    public async Task<DownloadInfo> downloadFile(string url, string dir) {
+        HttpResponseMessage response = await client.GetAsync(url);
+        if (response.RequestMessage?.RequestUri is null) {
+            // Should never be here executed
+            return DownloadInfo.Failed();
+        }
+        string fileName = extractName(response.RequestMessage.RequestUri);
+        long contentLength = response.Content.Headers.ContentLength ?? 0;
+        await using var stream = await client.GetStreamAsync(response.RequestMessage.RequestUri);
+        await using var fs = new FileStream(Path.Combine(dir, fileName), FileMode.OpenOrCreate);
+        await stream.CopyToAsync(fs);
+        return DownloadInfo.Ok(fileName, contentLength);
+    }
+
+    private static string extractName(Uri requestUri) {
+        int lastSlash = requestUri.LocalPath.LastIndexOf('/');
+        if (lastSlash == -1) {
+            return requestUri.LocalPath;
+        }
+        return requestUri.LocalPath[(lastSlash+1)..];
+    }
+
     public SimpleResponse fetchJson(string url) {
         var getRequest = new HttpRequestMessage {
             RequestUri = new Uri(url),
@@ -304,6 +331,8 @@ public struct Project {
                 return string.Equals("forge", modLoader, StringComparison.InvariantCultureIgnoreCase);
             case "neoforge":
                 return string.Equals("neoforge", modLoader, StringComparison.InvariantCultureIgnoreCase);
+            case "quilt":
+                return string.Equals("quilt", modLoader, StringComparison.InvariantCultureIgnoreCase);
             default:
                 // Dunno what it is, might be additional mod description
                 return true;
@@ -358,4 +387,29 @@ public struct Version {
         int lastDot = version.LastIndexOf('.');
         return lastDot == -1 ? "" : version[..lastDot];
     }
+}
+
+public struct DownloadInfo {
+    public string fileName { get; set; }
+    public long contentLength { get; set; }
+
+    private DownloadInfo(string fileName, long contentLength) {
+        this.fileName = fileName;
+        this.contentLength = contentLength;
+    }
+
+    public static DownloadInfo Ok(string fileName, long contentLength) {
+        return new DownloadInfo(fileName, contentLength);
+    }
+    public static DownloadInfo Failed() {
+        return new DownloadInfo("", 0);
+    }
+}
+
+public struct Dependency {
+    public uint modId { get; set; }
+
+    // urlName
+    public string urlName { get; set; }
+    public string author { get; set; }
 }

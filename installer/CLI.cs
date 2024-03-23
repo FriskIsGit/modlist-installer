@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Net;
 using System.Text;
+using System.Text.Json.Nodes;
 using WebScrapper.scrapper;
 
 namespace modlist_installer.installer;
@@ -9,9 +10,10 @@ public class CLI {
     // MAKE MOD LOADER AN ARGUMENT
     private const string MODLOADER = "Forge";
     private const string FAILED_PATH = "failed.html";
+    private const string DOWNLOADS = "mods";
     private static FlameAPI flameAPI = new();
 
-    public static void displayMods(string path) {
+    public static void displayModlist(string path) {
         Console.WriteLine("Parsing mods..");
         var mods = parseMods(path);
         if (mods.Count == 0) {
@@ -23,6 +25,47 @@ public class CLI {
         }
 
         Console.WriteLine($"Mods found: {mods.Count}");
+    }
+    public static void displayManifest(string path) {
+        Console.WriteLine("Parsing manifest..");
+        var manifest = parseManifest(path);
+        if (manifest is null) {
+            Console.WriteLine("Invalid manifest!");
+            return;
+        }
+        if (manifest.files.Count == 0) {
+            return;
+        }
+
+        Console.WriteLine("INFO:");
+        string by = manifest.author.Length != 0 ? $"by {manifest.author}" : "";
+        Console.WriteLine($"{manifest.name} {by} v{manifest.version}");
+        
+        var format = formatManifestFiles(manifest.files);
+        Console.WriteLine(format);
+    }
+
+    private static StringBuilder formatManifestFiles(List<ManifestFile> modFiles) {
+        var format = new StringBuilder();
+        format.Append("REQUIRED | FILE_ID | PROJECT_ID");
+        format.AppendLine();
+        format.Append("-------------------------------");
+        format.AppendLine();
+        uint countRequired = 0;
+        foreach (var mod in modFiles) {
+            if (mod.required)
+                countRequired++;
+            
+            string symbol = mod.required ? "[+]" : "[-]";
+            format.Append(symbol);
+            format.Append("    ");
+            format.Append(mod.fileID);
+            format.Append("    ");
+            format.Append(mod.projectID);
+            format.AppendLine();
+        }
+        format.Append($"Mods count: {modFiles.Count}    Required: {countRequired}");
+        return format;
     }
 
     private static List<Mod> parseMods(string path) {
@@ -79,8 +122,9 @@ public class CLI {
     /// 6. Call CF mods/{mod_id}/files endpoint with mod_id and gameVersionId, selecting latest release <br/>
     /// 7. Serialize all failed mods to a separate modlist <br/>
     /// </summary>
-    public static void installMods(string path, string version) {
+    public static void installModlist(string path, string version) {
         flameAPI.setMcVersion(version);
+
         var mods = parseMods(path);
         if (mods.Count == 0) {
             return;
@@ -89,7 +133,9 @@ public class CLI {
         Console.WriteLine($"Mods parsed: {mods.Count}");
         var modCache = ModCache.load();
         Console.WriteLine($"Loaded cache size: {modCache.size()}");
-
+        Directory.CreateDirectory(DOWNLOADS);
+        Console.WriteLine($"Downloading to '{DOWNLOADS}' directory");
+        
         int successes = 0;
         var failed = new List<Mod>();
         for (int m = 0; m < mods.Count && m < LIMIT; m++) {
@@ -128,15 +174,18 @@ public class CLI {
             
             string downloadURL = $"{FlameAPI.CF_MODS}/{id}/files/{modInfo.fileId}/download";
             var timer = Stopwatch.StartNew();
-            bool success = flameAPI.downloadFile(downloadURL, modInfo.fileName);
-            if (success) {
+
+            Task<DownloadInfo> downloadTask = flameAPI.downloadFile(downloadURL, DOWNLOADS);
+            try {
+                downloadTask.Wait();
+                var info = downloadTask.Result;
                 successes++;
                 Console.WriteLine(
-                    $"({successes}/{mods.Count}) Downloaded {modInfo.fileName} in {timer.Elapsed.Milliseconds}ms ");
-            }
-            else {
+                    $"({successes}/{mods.Count}) Downloaded {info.fileName} in {timer.Elapsed.Milliseconds}ms ");
+            } catch (AggregateException e) {
+                Console.WriteLine(e.Message);
                 failed.Add(mod);
-                Console.WriteLine($"Failed on {modInfo.fileName}");
+                Console.WriteLine($"Failed on {downloadURL}");
             }
         }
 
@@ -149,6 +198,71 @@ public class CLI {
         modCache.serialize();
     }
 
+    public static void installManifest(string path) {
+        Manifest? manifest = parseManifest(path);
+        if (manifest is null) {
+            return;
+        }
+        Directory.CreateDirectory(manifest.name);
+        Console.WriteLine($"Downloading to '{manifest.name}' directory");
+        
+        var failed = new List<ManifestFile>();
+        uint successes = 0;
+        var allMods = manifest.files.Count;
+        foreach (var mod in manifest.files) {
+            uint modId = mod.projectID;
+            uint fileId = mod.fileID;
+            string downloadURL = $"{FlameAPI.CF_MODS}/{modId}/files/{fileId}/download";
+            
+            var timer = Stopwatch.StartNew();
+            Task<DownloadInfo> downloadTask = flameAPI.downloadFile(downloadURL, manifest.name);
+            try {
+                downloadTask.Wait();
+                var info = downloadTask.Result;
+                successes++;
+                Console.WriteLine(
+                    $"({successes}/{allMods}) Downloaded {info.fileName} in {timer.Elapsed.Milliseconds}ms ");
+            } catch (AggregateException e) {
+                Console.WriteLine(e.Message);
+                failed.Add(mod);
+                Console.WriteLine($"Failed on {downloadURL}");
+            }
+        }
+        var failedFormat = formatManifestFiles(failed);
+        Console.WriteLine("FAILED:");
+        Console.WriteLine(failedFormat);
+    }
+    private static Manifest? parseManifest(string path) {
+        if (!File.Exists(path)) {
+            Console.WriteLine("File does not exist. Exiting.");
+            return null;
+        }
+
+        string content = File.ReadAllText(path);
+        
+        var jsonObj = JsonNode.Parse(content);
+        string name = jsonObj?["name"]?.ToString() ?? "";
+        string version = jsonObj?["version"]?.ToString() ?? "";
+        string author = jsonObj?["author"]?.ToString() ?? "";
+        JsonArray? filesArr = jsonObj?["files"]?.AsArray();
+
+        if (filesArr is null) {
+            return new Manifest(name, version, author, 0);
+        }
+
+        var manifest = new Manifest(name, version, author, filesArr.Count);
+        foreach (var fileElement in filesArr) {
+            if (fileElement is null) {
+                continue;
+            }
+
+            var file = ManifestFile.Parse(fileElement);
+            manifest.files.Add(file);
+        }
+
+        return manifest;
+    }
+    
     private static void writeModsToFile(List<Mod> mods, string path) {
         using var file = File.Create(path);
         using var stream = new BufferedStream(file);
@@ -159,7 +273,6 @@ public class CLI {
             stream.Write(bytes);
             stream.Write(Encoding.ASCII.GetBytes(Environment.NewLine));
         }
-
         stream.Write("</ul>"u8);
     }
 
