@@ -1,8 +1,6 @@
 using System.Diagnostics;
 using System.Net;
 using System.Text;
-using System.Text.Json.Nodes;
-using WebScrapper.scrapper;
 
 namespace modlist_installer.installer;
 
@@ -15,20 +13,27 @@ public class CLI {
 
     public static void displayModlist(string path) {
         Console.WriteLine("Parsing mods..");
-        var mods = parseMods(path);
+        var mods = Mod.parseMods(path);
         if (mods.Count == 0) {
             return;
         }
 
         foreach (var mod in mods) {
-            Console.WriteLine(mod);
+            Console.WriteLine(modToString(mod));
         }
 
         Console.WriteLine($"Mods found: {mods.Count}");
     }
+
+    private static string modToString(Mod mod) {
+        var padded_name = pad('[' + mod.name + ']', 24);
+        var padded_author = pad('"' + mod.author + '"', 12);
+        return $"{padded_name} {padded_author} {mod.url}";
+    }
+    
     public static void displayManifest(string path) {
         Console.WriteLine("Parsing manifest..");
-        var manifest = parseManifest(path);
+        var manifest = Manifest.parseManifest(path);
         if (manifest is null) {
             Console.WriteLine("Invalid manifest!");
             return;
@@ -37,12 +42,11 @@ public class CLI {
             return;
         }
 
-        Console.WriteLine("INFO:");
-        string by = manifest.author.Length != 0 ? $"by {manifest.author}" : "";
-        Console.WriteLine($"{manifest.name} {by} v{manifest.version}");
         
         var format = formatManifestFiles(manifest.files);
         Console.WriteLine(format);
+        printManifestLabels(true, true);
+        printManifestInfo(manifest, true);
     }
 
     private static StringBuilder formatManifestFiles(List<ManifestFile> modFiles) {
@@ -64,49 +68,8 @@ public class CLI {
             format.Append(mod.projectID);
             format.AppendLine();
         }
-        format.Append($"Mods count: {modFiles.Count}    Required: {countRequired}");
+        format.Append($"Required mods: {countRequired}");
         return format;
-    }
-
-    private static List<Mod> parseMods(string path) {
-        if (!File.Exists(path)) {
-            Console.WriteLine("File does not exist. Exiting.");
-            return new List<Mod>();
-        }
-
-        string contents = File.ReadAllText(path);
-        HtmlDoc html = new(contents);
-        List<Tag> anchors = html.FindAll("a");
-        if (anchors.Count == 0) {
-            return new List<Mod>();
-        }
-
-        List<Mod> mods = new List<Mod>(anchors.Count);
-        foreach (var anchor in anchors) {
-            foreach (var (key, link) in anchor.Attributes) {
-                if (key != "href")
-                    continue;
-
-                if (link.Contains("minecraft.curseforge")) {
-                    string description = html.ExtractText(anchor);
-                    var mod = new Mod(description, link);
-                    // fill the id field since we're given it
-                    string numerical_id = mod.getUrlEnd();
-                    try {
-                        mod.id = uint.Parse(numerical_id);
-                    }
-                    catch (Exception) { }
-                    mods.Add(mod);
-                }
-                else {
-                    // assume it's the new format
-                    string desc = html.ExtractText(anchor);
-                    mods.Add(new Mod(desc, link));
-                }
-            }
-        }
-
-        return mods;
     }
 
     // const to limit the input size for testing purposes
@@ -125,7 +88,7 @@ public class CLI {
     public static void installModlist(string path, string version) {
         flameAPI.setMcVersion(version);
 
-        var mods = parseMods(path);
+        var mods = Mod.parseMods(path);
         if (mods.Count == 0) {
             return;
         }
@@ -140,7 +103,7 @@ public class CLI {
         var failed = new List<Mod>();
         for (int m = 0; m < mods.Count && m < LIMIT; m++) {
             var mod = mods[m];
-            Console.WriteLine(mod);
+            Console.WriteLine(modToString(mod));
 
             uint id = findModId(mod, modCache);
             if (id == 0) {
@@ -191,7 +154,7 @@ public class CLI {
 
         Console.WriteLine($"Writing {failed.Count} failed downloads to {FAILED_PATH}");
         if (mods.Count > 0) {
-            writeModsToFile(failed, FAILED_PATH);
+            Mod.writeModsToFile(failed, FAILED_PATH);
         }
 
         Console.WriteLine($"Serializing cache of {modCache.size()} entries");
@@ -199,7 +162,7 @@ public class CLI {
     }
 
     public static void installManifest(string path) {
-        Manifest? manifest = parseManifest(path);
+        Manifest? manifest = Manifest.parseManifest(path);
         if (manifest is null) {
             return;
         }
@@ -232,58 +195,16 @@ public class CLI {
         Console.WriteLine("FAILED:");
         Console.WriteLine(failedFormat);
     }
-    private static Manifest? parseManifest(string path) {
-        if (!File.Exists(path)) {
-            Console.WriteLine("File does not exist. Exiting.");
-            return null;
-        }
-
-        string content = File.ReadAllText(path);
-        
-        var jsonObj = JsonNode.Parse(content);
-        string name = jsonObj?["name"]?.ToString() ?? "";
-        string version = jsonObj?["version"]?.ToString() ?? "";
-        string author = jsonObj?["author"]?.ToString() ?? "";
-        JsonArray? filesArr = jsonObj?["files"]?.AsArray();
-
-        if (filesArr is null) {
-            return new Manifest(name, version, author, 0);
-        }
-
-        var manifest = new Manifest(name, version, author, filesArr.Count);
-        foreach (var fileElement in filesArr) {
-            if (fileElement is null) {
-                continue;
-            }
-
-            var file = ManifestFile.Parse(fileElement);
-            manifest.files.Add(file);
-        }
-
-        return manifest;
-    }
     
-    private static void writeModsToFile(List<Mod> mods, string path) {
-        using var file = File.Create(path);
-        using var stream = new BufferedStream(file);
-        stream.Write("<ul>"u8);
-        stream.Write(Encoding.ASCII.GetBytes(Environment.NewLine));
-        foreach (var mod in mods) {
-            byte[] bytes = Encoding.UTF8.GetBytes(mod.asListElement());
-            stream.Write(bytes);
-            stream.Write(Encoding.ASCII.GetBytes(Environment.NewLine));
-        }
-        stream.Write("</ul>"u8);
-    }
 
-    public static void createModDifference(string path1, string path2) {
-        List<Mod> mods1 = parseMods(path1);
+    public static void createModlistDifference(string path1, string path2) {
+        List<Mod> mods1 = Mod.parseMods(path1);
         if (mods1.Count == 0) {
             Console.WriteLine("No mods contained in 1st list");
             return;
         }
         
-        List<Mod> mods2 = parseMods(path2);
+        List<Mod> mods2 = Mod.parseMods(path2);
         if (mods2.Count == 0) {
             Console.WriteLine("No mods contained in 2nd list");
             return;
@@ -317,7 +238,7 @@ public class CLI {
         foreach (var name in modSet1) {
             differentMods.Add(namesToMods[name]);
         }
-        writeModsToFile(differentMods, "diff.html");
+        Mod.writeModsToFile(differentMods, "diff.html");
     }
 
     private static uint findModId(Mod mod, ModCache cache) {
@@ -401,5 +322,123 @@ public class CLI {
         }
 
         Console.WriteLine("Found " + author.projects.Count + " projects");
+    }
+
+    private const int NAME_LEN = 22;
+    private const int AUTHOR_LEN = 15;
+    private const int VERSION_LEN = 10;
+    private const int FILES_LEN = 5;
+    
+    public static void createManifestDifference(string path1, string path2) {
+        var manifest1 = Manifest.parseManifest(path1);
+        if (manifest1 is null) {
+            Console.WriteLine("First manifest is invalid");
+            return;
+        }
+        var manifest2 = Manifest.parseManifest(path2);
+        if (manifest2 is null) {
+            Console.WriteLine("First manifest is invalid");
+            return;
+        }
+
+        printManifestLabels(true, true);
+        printManifestInfo(manifest1, false);
+        printManifestInfo(manifest2, true);
+        
+        var modSet1 = new HashSet<uint>(manifest1.files.Count);
+        var modSet2 = new HashSet<uint>(manifest2.files.Count);
+
+        foreach (var mod in manifest1.files) 
+            modSet1.Add(mod.fileID);
+        foreach (var mod in manifest2.files) 
+            modSet2.Add(mod.fileID);
+        
+        modSet1.SymmetricExceptWith(modSet2);
+        Console.WriteLine("File ID differences: " + modSet1.Count);
+        Manifest diff = new Manifest(manifest1.name, "difference", manifest1.author, modSet1.Count);
+        foreach (var fileId in modSet1) {
+            bool found = false;
+            foreach (var modFile in manifest1.files) {
+                if (modFile.fileID == fileId) {
+                    diff.files.Add(modFile);
+                    found = true;
+                    break;
+                }
+            }
+            if (found) {
+                continue;
+            }
+            foreach (var modFile in manifest2.files) {
+                if (modFile.fileID == fileId) {
+                    diff.files.Add(modFile);
+                    break;
+                }
+            }
+        }
+        Manifest.serializeManifest(diff, "diff.json");
+        Console.WriteLine("Serialized manifest!");
+    }
+
+    private static void printManifestLabels(bool startLineSeparator, bool endLineSeparator) {
+        var line = characterLine('-', NAME_LEN + AUTHOR_LEN + VERSION_LEN + FILES_LEN + 5);
+        var nameLabel = centerPad("NAME", NAME_LEN);
+        var authorLabel = centerPad("AUTHOR", AUTHOR_LEN);
+        var versionLabel = centerPad("VERSION", VERSION_LEN);
+        var filesLabel = centerPad("FILES", FILES_LEN);
+        if (startLineSeparator) {
+            Console.WriteLine(line);
+        }
+        Console.WriteLine($"|{nameLabel}|{authorLabel}|{versionLabel}|{filesLabel}|");
+        if (endLineSeparator) {
+            Console.WriteLine(line);
+        }
+    }
+
+
+    private static void printManifestInfo(Manifest manifest, bool endLineSeparator) {
+        Console.Write("|");
+        Console.Write(centerPad(manifest.name, NAME_LEN));
+        Console.Write("|");
+        Console.Write(centerPad(manifest.author, AUTHOR_LEN));
+        Console.Write("|");
+        Console.Write(centerPad(manifest.version, VERSION_LEN));
+        Console.Write("|");
+        Console.Write(centerPad(manifest.files.Count.ToString(), FILES_LEN));
+        Console.WriteLine("|");
+        if (endLineSeparator) {
+            Console.WriteLine(characterLine('-', NAME_LEN + AUTHOR_LEN + VERSION_LEN + FILES_LEN + 5));
+        }
+    }
+
+    private static string centerPad(string str, int minLength) {
+        var builder = new StringBuilder(str);
+        var padding = minLength - str.Length;
+        var half = padding / 2;
+        for (int i = 0; i < half; i++) {
+            builder.Insert(0, ' ');
+        }
+        for (int i = half; i < padding; i++) {
+            builder.Append(' ');
+        }
+
+        return builder.ToString();
+    }
+
+    private static string characterLine(char chr, int length) {
+        var builder = new StringBuilder(length);
+        for (int i = 0; i < length; i++) {
+            builder.Append(chr);
+        }
+        return builder.ToString();
+    }
+    
+    private static string pad(string str, int minLength) {
+        var builder = new StringBuilder(str);
+        var padding = minLength - str.Length;
+        for (int i = 0; i < padding; i++) {
+            builder.Append(' ');
+        }
+
+        return builder.ToString();
     }
 }

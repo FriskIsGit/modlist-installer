@@ -19,4 +19,5 @@ git clone --recurse-submodules https://github.com/FriskIsGit/modlist-installer
 `mod.cache` - mod names to ids mappings </br>
 `failed.html` - html-formatted mods that failed to download </br>
 `diff.html` - html-formatted mods that are the difference of two mod lists </br>
+`diff.json` - json manifest mods that are the difference of two manifests </br>
 `release_win.bat` - command to release the app as standalone and trim

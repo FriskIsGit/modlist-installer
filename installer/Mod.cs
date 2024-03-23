@@ -1,4 +1,5 @@
 using System.Text;
+using WebScrapper.scrapper;
 
 namespace modlist_installer.installer;
 
@@ -21,7 +22,7 @@ public struct Mod {
         author = extractAuthor(description);
     }
 
-    public string asListElement() {
+    private string asListElement() {
         return $"<li><a href=\"{url}\">{name} (by {author})</a></li>";
     }
 
@@ -51,22 +52,58 @@ public struct Mod {
         return modName[(by + 3)..end];
     }
 
-    private const int MINIMUM_NAME_LENGTH = 24;
-    private const int MINIMUM_AUTHOR_LENGTH = 14;
-
-    private static string pad(string str, int minLength) {
-        var builder = new StringBuilder(str);
-        var padding = minLength - str.Length;
-        for (int i = 0; i < padding; i++) {
-            builder.Append(' ');
+    public static List<Mod> parseMods(string path) {
+        if (!File.Exists(path)) {
+            Console.WriteLine("File does not exist. Exiting.");
+            return new List<Mod>();
         }
 
-        return builder.ToString();
+        string contents = File.ReadAllText(path);
+        HtmlDoc html = new(contents);
+        List<Tag> anchors = html.FindAll("a");
+        if (anchors.Count == 0) {
+            return new List<Mod>();
+        }
+
+        List<Mod> mods = new List<Mod>(anchors.Count);
+        foreach (var anchor in anchors) {
+            foreach (var (key, link) in anchor.Attributes) {
+                if (key != "href")
+                    continue;
+
+                if (link.Contains("minecraft.curseforge")) {
+                    string description = html.ExtractText(anchor);
+                    var mod = new Mod(description, link);
+                    // fill the id field since we're given it
+                    string numerical_id = mod.getUrlEnd();
+                    try {
+                        mod.id = uint.Parse(numerical_id);
+                    }
+                    catch (Exception) { }
+                    mods.Add(mod);
+                }
+                else {
+                    // assume it's the new format
+                    string desc = html.ExtractText(anchor);
+                    mods.Add(new Mod(desc, link));
+                }
+            }
+        }
+
+        return mods;
     }
-    public override string ToString() {
-        var padded_name = pad('[' + name + ']', MINIMUM_NAME_LENGTH);
-        var padded_author = pad('"' + author + '"', MINIMUM_AUTHOR_LENGTH);
-        return $"{padded_name} {padded_author} {url}";
-    } 
+    
+    public static void writeModsToFile(List<Mod> mods, string path) {
+        using var file = File.Create(path);
+        using var stream = new BufferedStream(file);
+        stream.Write("<ul>"u8);
+        stream.Write(Encoding.ASCII.GetBytes(Environment.NewLine));
+        foreach (var mod in mods) {
+            byte[] bytes = Encoding.UTF8.GetBytes(mod.asListElement());
+            stream.Write(bytes);
+            stream.Write(Encoding.ASCII.GetBytes(Environment.NewLine));
+        }
+        stream.Write("</ul>"u8);
+    }
 }
 

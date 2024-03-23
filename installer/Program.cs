@@ -4,7 +4,7 @@ using System.Net;
 namespace modlist_installer.installer;
 
 class Program {
-    public const string VERSION = "2.0.0";
+    public const string VERSION = "2.0.1";
 
     private static void Main(string[] args) {
         if (args.Length == 0) {
@@ -18,7 +18,13 @@ class Program {
             case "show":
             case "print":
                 if (args.Length == 1) {
-                    Console.WriteLine("Path to modlist is required.");
+                    Console.WriteLine("Path to modlist is required. Displaying possibilities..");
+                    string[] files = Directory.GetFileSystemEntries(".");
+                    foreach (var file in files) {
+                        if (file.EndsWith(".json") || file.EndsWith(".html")) {
+                            Console.WriteLine(file);
+                        }
+                    }
                     return;
                 }
                 if (args[1].EndsWith(".html")) {
@@ -90,7 +96,18 @@ class Program {
                     Console.WriteLine("Two mod lists must be specified");
                     return;
                 }
-                CLI.createModDifference(args[1], args[2]);
+                var arg1 = args[1];
+                var arg2 = args[2];
+
+                if (arg1.EndsWith(".json") && arg2.EndsWith(".json")) {
+                    CLI.createManifestDifference(arg1, arg2);
+                } else if (arg1.EndsWith(".html") && arg2.EndsWith(".html")) {
+                    CLI.createModlistDifference(arg1, arg2);
+                } else {
+                    Console.WriteLine("Incompatible formats");
+                }
+                
+                
                 break;
             default:
                 string arg0 = args[0];
@@ -119,6 +136,8 @@ class Program {
         Console.WriteLine("        Install specified modlist (CF) targeting the latest release of specified version");
         Console.WriteLine("  diff <list1.html> <list2.html>");
         Console.WriteLine("        Generate a modlist that's the difference of two mod lists (OFFLINE)");
+        Console.WriteLine("  diff <manifest1.json> <manifest2.json>");
+        Console.WriteLine("        Generate a manifest that's the difference of two manifests (OFFLINE)");
         Console.WriteLine("  author <name>");
         Console.WriteLine("        Fetch author by name, displaying their projects (CFWidget)");
         Console.WriteLine("  id <mod_name>");
