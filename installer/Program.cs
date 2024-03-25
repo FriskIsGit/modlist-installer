@@ -1,5 +1,4 @@
-﻿
-using System.Net;
+﻿using System.Net;
 
 namespace modlist_installer.installer;
 
@@ -28,9 +27,9 @@ class Program {
                     return;
                 }
                 if (args[1].EndsWith(".html")) {
-                    CLI.displayModlist(args[1]);
+                    ModlistHandler.displayModlist(args[1]);
                 } else if (args[1].EndsWith(".json")) {
-                    CLI.displayManifest(args[1]);
+                    ModlistHandler.displayManifest(args[1]);
                 } else {
                     Console.WriteLine("Unrecognized format?");
                 }
@@ -44,21 +43,21 @@ class Program {
                     case 2:
                         string path = args[1];
                         if (path.EndsWith(".json")) {
-                            CLI.installManifest(path);
+                            ModlistHandler.installManifest(path);
                         } else if (path.EndsWith(".html")) {
                             Console.WriteLine("Version not specified, defaulting to 1.12.2");
-                            CLI.installModlist(args[1], "1.12.2");
+                            ModlistHandler.installModlist(args[1], "1.12.2");
                         } else {
                             Console.WriteLine("Unrecognized format?");
                         }
                         return;
                     case 3:
                         if (args[1].EndsWith(".json")) {
-                            CLI.installManifest(args[1]);
+                            ModlistHandler.installManifest(args[1]);
                         } else if(args[1].EndsWith(".html")) {
                             string version = args[2].Trim();
                             Console.WriteLine($"Version: {version}");
-                            CLI.installModlist(args[1], version);
+                            ModlistHandler.installModlist(args[1], version);
                         } else {
                             Console.WriteLine("Unrecognized format?");
                         }
@@ -71,7 +70,7 @@ class Program {
                     return;
                 }
 
-                CLI.displayAuthor(args[1]);
+                ModlistHandler.displayAuthor(args[1]);
                 break;
             case "id":
                 if (args.Length == 1) {
@@ -90,6 +89,14 @@ class Program {
                 uint id = SearchEngine.scrapeProjectID(response.content, args[1]);
                 Console.WriteLine($"Id: {id}");
                 break;
+            case "compare":
+                if (args.Length < 3) {
+                    Console.WriteLine("Two paths to directories are required");
+                    return;
+                }
+
+                ModlistHandler.compareDirectories(args[1], args[2]);
+                break;
             case "diff":
             case "difference":
                 if (args.Length < 3) {
@@ -100,13 +107,12 @@ class Program {
                 var arg2 = args[2];
 
                 if (arg1.EndsWith(".json") && arg2.EndsWith(".json")) {
-                    CLI.createManifestDifference(arg1, arg2);
+                    ModlistHandler.createManifestDifference(arg1, arg2);
                 } else if (arg1.EndsWith(".html") && arg2.EndsWith(".html")) {
-                    CLI.createModlistDifference(arg1, arg2);
+                    ModlistHandler.createModlistDifference(arg1, arg2);
                 } else {
                     Console.WriteLine("Incompatible formats");
                 }
-                
                 
                 break;
             default:
@@ -142,5 +148,7 @@ class Program {
         Console.WriteLine("        Fetch author by name, displaying their projects (CFWidget)");
         Console.WriteLine("  id <mod_name>");
         Console.WriteLine("        Scrape mod id by name");
+        Console.WriteLine("  compare <dir_path1> <dir_path2>");
+        Console.WriteLine("        Compare jar files between two directories");
     }
 }

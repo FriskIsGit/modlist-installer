@@ -1,7 +1,5 @@
-﻿using System.Text;
-using System.Text.Json;
+﻿using System.Text.Json;
 using System.Text.Json.Nodes;
-using System.Xml;
 
 namespace modlist_installer.installer;
 
@@ -9,7 +7,6 @@ public class Manifest {
     public readonly string name;
     public readonly string version;
     public readonly string author;
-    // set to 0 for named urls, set to mod id for old urls
     public List<ManifestFile> files;
     
     public Manifest(string name, string version, string author, int fileCapacity) {
@@ -74,6 +71,12 @@ public class Manifest {
         writer.WriteEndArray();
         writer.WriteEndObject();
         writer.Flush();
+    }
+
+    public void fill(List<ManifestFile> manifestFiles) {
+        foreach (var file in manifestFiles) {
+            files.Add(file);
+        }
     }
 }
 

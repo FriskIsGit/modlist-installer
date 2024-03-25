@@ -4,10 +4,11 @@ using System.Text;
 
 namespace modlist_installer.installer;
 
-public class CLI {
+public class ModlistHandler {
     // MAKE MOD LOADER AN ARGUMENT
     private const string MODLOADER = "Forge";
-    private const string FAILED_PATH = "failed.html";
+    private const string FAILED_HTML = "failed.html";
+    private const string FAILED_JSON = "failed.json";
     private const string DOWNLOADS = "mods";
     private static FlameAPI flameAPI = new();
 
@@ -49,11 +50,15 @@ public class CLI {
         printManifestInfo(manifest, true);
     }
 
+    private const int SYMBOL_LEN = 10;
+    private const int PROJECT_ID_LEN = 12;
+    private const int FILE_ID_LEN = 9;
+    
     private static StringBuilder formatManifestFiles(List<ManifestFile> modFiles) {
         var format = new StringBuilder();
-        format.Append("REQUIRED | FILE_ID | PROJECT_ID");
+        format.Append("| REQUIRED | PROJECT_ID | FILE_ID |");
         format.AppendLine();
-        format.Append("-------------------------------");
+        format.Append("-----------------------------------");
         format.AppendLine();
         uint countRequired = 0;
         foreach (var mod in modFiles) {
@@ -61,11 +66,13 @@ public class CLI {
                 countRequired++;
             
             string symbol = mod.required ? "[+]" : "[-]";
-            format.Append(symbol);
-            format.Append("    ");
-            format.Append(mod.fileID);
-            format.Append("    ");
-            format.Append(mod.projectID);
+            format.Append('|');
+            format.Append(centerPad(symbol, SYMBOL_LEN));
+            format.Append('|');
+            format.Append(centerPad(mod.projectID.ToString(), PROJECT_ID_LEN));
+            format.Append('|');
+            format.Append(centerPad(mod.fileID.ToString(), FILE_ID_LEN));
+            format.Append('|');
             format.AppendLine();
         }
         format.Append($"Required mods: {countRequired}");
@@ -152,9 +159,9 @@ public class CLI {
             }
         }
 
-        Console.WriteLine($"Writing {failed.Count} failed downloads to {FAILED_PATH}");
+        Console.WriteLine($"Writing {failed.Count} failed downloads to {FAILED_HTML}");
         if (mods.Count > 0) {
-            Mod.writeModsToFile(failed, FAILED_PATH);
+            Mod.writeModsToFile(failed, FAILED_HTML);
         }
 
         Console.WriteLine($"Serializing cache of {modCache.size()} entries");
@@ -194,6 +201,10 @@ public class CLI {
         var failedFormat = formatManifestFiles(failed);
         Console.WriteLine("FAILED:");
         Console.WriteLine(failedFormat);
+        var failedManifest = new Manifest(manifest.name, "failed", manifest.author, failed.Count);
+        failedManifest.fill(failed);
+        Manifest.serializeManifest(failedManifest, FAILED_JSON);
+        Console.WriteLine($"Serialized to {FAILED_JSON}");
     }
     
 
@@ -440,5 +451,107 @@ public class CLI {
         }
 
         return builder.ToString();
+    }
+
+    public static void compareDirectories(string path1, string path2) {
+        if (!Directory.Exists(path1)) {
+            Console.WriteLine($"{path1} not found!");
+            return;
+        }
+        if (!Directory.Exists(path2)) {
+            Console.WriteLine($"{path2} not found!");
+            return;
+        }
+        
+        string[] files1 = Directory.GetFiles(path1);
+        List<Jar> jars1 = convertToJars(files1);
+        string[] files2 = Directory.GetFiles(path2);
+        List<Jar> jars2 = convertToJars(files1);
+        convertToJars(files2);
+        foreach (var jar1 in jars1) {
+            Jar? candidate = null;
+            bool equal = false;
+            foreach (var jar2 in jars2) {
+                if (!jar1.modName.StartsWith(jar2.modName)) 
+                    continue;
+                
+                if (jar1.modName == jar2.modName && jar1.version == jar2.version) {
+                    equal = true;
+                    break;
+                }
+                candidate = jar2;
+            }
+
+            if (equal) {
+                continue;
+            }
+
+            if (candidate is null) {
+                printDirectoryEntries(jar1.modName + ' ' + jar1.version, "MISSING");
+            } else {
+                var match = candidate.Value;
+                printDirectoryEntries(jar1.modName + ' ' + jar1.version, match.modName + ' ' + match.version);
+            }
+        }
+    }
+
+    private const int JAR_NAME_LEN = 50;
+    private static void printDirectoryEntries(string name1, string name2) {
+        var str = new StringBuilder();
+        str.Append('|');
+        str.Append(centerPad(name1, JAR_NAME_LEN));
+        str.Append('|');
+        str.Append(centerPad(name2, JAR_NAME_LEN));
+        str.Append('|');
+        Console.WriteLine(str);
+    }
+
+    private static List<Jar> convertToJars(string[] files) {
+        var jars = new List<Jar>();
+        for (int i = 0; i< files.Length; i++) {
+            var file = files[i];
+            if (!file.EndsWith(".jar")) {
+                continue;
+            }
+            var slash = file.LastIndexOf('/');
+            if (slash == -1) {
+                slash = file.LastIndexOf('\\');
+            }
+            if (slash == -1) {
+                continue;
+            }
+
+            files[i] = file[(slash + 1)..];
+            var jar = new Jar(files[i]);
+            jars.Add(jar);
+        }
+
+        return jars;
+    }
+}
+
+struct Jar {
+    public string modName;
+    public string version;
+
+    public Jar(string filename) {
+        filename = filename.ToLower();
+        var jar = filename.LastIndexOf(".jar", StringComparison.Ordinal);
+        string extensionlessName = filename[..jar];
+        var nameSeparator = extensionlessName.IndexOf('-');
+        if (nameSeparator == -1) {
+            nameSeparator = extensionlessName.IndexOf(' ');
+        }
+        if (nameSeparator == -1) {
+            nameSeparator = extensionlessName.IndexOf('_');
+        }
+        if (nameSeparator == -1) {
+            Console.WriteLine($"I don't know how to parse name & version: {extensionlessName}");
+            modName = extensionlessName;
+            version = extensionlessName;
+            return;
+        }
+        modName = extensionlessName[..nameSeparator];
+        version = extensionlessName[(nameSeparator+1)..];
     }
 }

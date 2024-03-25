@@ -16,7 +16,7 @@ public class FlameAPI {
     private Version version;
 
     public FlameAPI() {
-        // BaseAddress, Timeout, MaxResponseContentBufferSize are properties that cannot be modified..
+        // BaseAddress, Timeout, MaxResponseContentBufferSize are properties that cannot be modified after a request is made
         client.Timeout = Timeout.InfiniteTimeSpan;
         //client.Timeout = TimeSpan.FromSeconds(300);
     }
