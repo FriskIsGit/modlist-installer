@@ -36,8 +36,7 @@ public class SearchEngine {
                 continue;
             }
             
-            Tag? urlAnchor = html.FindFrom("a", resultTag.StartOffset, 
-                ("class", "result__url", Compare.EXACT), ("href", "", Compare.KEY_ONLY));
+            Tag? urlAnchor = html.FindFrom("a", resultTag.StartOffset, ("class", "result__url", Compare.EXACT));
 
             if (urlAnchor is null) {
                 continue;
@@ -49,8 +48,8 @@ public class SearchEngine {
                 continue;
             }
 
-            Tag? summaryTag = html.FindFrom("a", urlAnchor.StartOffset + 100,
-                ("class", "result__snippet", Compare.EXACT), ("href", "", Compare.KEY_ONLY));
+            Tag? summaryTag = html.FindFrom("a", urlAnchor.StartOffset + 100, 
+                ("class", "result__snippet", Compare.EXACT));
             if (summaryTag is null) {
                 continue;
             }

@@ -60,7 +60,7 @@ public struct Mod {
 
         string contents = File.ReadAllText(path);
         HtmlDoc html = new(contents);
-        List<Tag> anchors = html.FindAll("a", ("href", "", Compare.KEY_ONLY));
+        List<Tag> anchors = html.FindAll("a");
         if (anchors.Count == 0) {
             return new List<Mod>();
         }
