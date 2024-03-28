@@ -60,33 +60,32 @@ public struct Mod {
 
         string contents = File.ReadAllText(path);
         HtmlDoc html = new(contents);
-        List<Tag> anchors = html.FindAll("a");
+        List<Tag> anchors = html.FindAll("a", ("href", "", Compare.KEY_ONLY));
         if (anchors.Count == 0) {
             return new List<Mod>();
         }
 
         List<Mod> mods = new List<Mod>(anchors.Count);
         foreach (var anchor in anchors) {
-            foreach (var (key, link) in anchor.Attributes) {
-                if (key != "href")
-                    continue;
-
-                if (link.Contains("minecraft.curseforge")) {
-                    string description = html.ExtractText(anchor);
-                    var mod = new Mod(description, link);
-                    // fill the id field since we're given it
-                    string numerical_id = mod.getUrlEnd();
-                    try {
-                        mod.id = uint.Parse(numerical_id);
-                    }
-                    catch (Exception) { }
-                    mods.Add(mod);
+            string? link = anchor.GetAttribute("href");
+            if (link is null) {
+                continue;
+            }
+            if (link.Contains("minecraft.curseforge")) {
+                string description = html.ExtractText(anchor);
+                var mod = new Mod(description, link);
+                // fill the id field since we're given it
+                string numerical_id = mod.getUrlEnd();
+                try {
+                    mod.id = uint.Parse(numerical_id);
                 }
-                else {
-                    // assume it's the new format
-                    string desc = html.ExtractText(anchor);
-                    mods.Add(new Mod(desc, link));
-                }
+                catch (Exception) { }
+                mods.Add(mod);
+            }
+            else {
+                // assume it's the new format
+                string desc = html.ExtractText(anchor);
+                mods.Add(new Mod(desc, link));
             }
         }
 

@@ -97,6 +97,7 @@ public class ModlistHandler {
 
         var mods = Mod.parseMods(path);
         if (mods.Count == 0) {
+            Console.WriteLine("No mods found. Exiting");
             return;
         }
 

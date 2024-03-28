@@ -18,48 +18,43 @@ public class SearchEngine {
     public static uint scrapeProjectID(string duckHtml, string urlName) {
         var html = new HtmlDoc(duckHtml);
 
-        Tag? resultsTag = html.Find("div", ("id", "links"), ("class", "results"));
+        Tag? resultsTag = html.Find("div", 
+            ("id", "links", Compare.EXACT), ("class", "results", Compare.EXACT));
         if (resultsTag is null) {
             Console.WriteLine("There were no results for this name");
             return 0;
         }
 
-        List<Tag> results = html.FindAllFrom("div", resultsTag.StartOffset, false, 
-            ("class", "links_main links_deep result__body"));
+        List<Tag> results = html.FindAllFrom("div", resultsTag.StartOffset + 20,  
+            ("class", "result results_links", Compare.VALUE_STARTS_WITH));
         
         for (int i = 0; i < results.Count && i < MAX_SEARCHABLE_TAGS; i++) {
             Tag resultTag = results[i];
+            // Ensure it's a result
+            string? classAttrib = resultsTag.GetAttribute("class");
+            if (classAttrib == null || !classAttrib.StartsWith("result")) {
+                continue;
+            }
             
-            Tag? extraResults = html.FindFrom("div", resultTag.StartOffset, false, 
-                ("class", "result__extras__url"));
+            Tag? urlAnchor = html.FindFrom("a", resultTag.StartOffset, 
+                ("class", "result__url", Compare.EXACT), ("href", "", Compare.KEY_ONLY));
 
-            if (extraResults is null) {
+            if (urlAnchor is null) {
                 continue;
             }
-            
-            Tag? anchor = html.FindFrom("a", extraResults.StartOffset+1, true);
-            if (anchor is null) {
-                continue;
-            }
-            // first anchor is for the icon
-            if (!anchor.ContainsAttribute(("class", "result__url"))) {
-                // minimum tag content size 300
-                anchor = html.FindFrom("a", extraResults.StartOffset+300, true);
-            }
-            
-            if (anchor is null || !anchor.ContainsAttribute(("class", "result__url"))) {
-                continue;
-            }
-                
-            string cfUrl = html.ExtractText(anchor).Trim();
-            // Console.WriteLine($"CF_URL: {cfUrl}");
+
+            string cfUrl = html.ExtractText(urlAnchor).Trim();
             string extractedName = extractModName(cfUrl);
             if (urlName != extractedName) {
                 continue;
             }
 
-            string text = html.ExtractText(resultTag);
-            // TODO Maybe ensure "Project" is found first? 
+            Tag? summaryTag = html.FindFrom("a", urlAnchor.StartOffset + 100,
+                ("class", "result__snippet", Compare.EXACT), ("href", "", Compare.KEY_ONLY));
+            if (summaryTag is null) {
+                continue;
+            }
+            string text = html.ExtractText(summaryTag);
             int id_index = text.IndexOf("ID", StringComparison.InvariantCulture);
             if (id_index == -1) {
                 continue;
