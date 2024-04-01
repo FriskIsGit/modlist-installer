@@ -1,7 +1,7 @@
 ## Mod list installer
 Install minecraft mods listed in `modlist.html` or `manifest.json` </br>
 
-https://github.com/FriskIsGit/modlist-installer/assets/59506639/4f5c42aa-5af9-4d83-863c-85e824f1ea94
+https://github.com/FriskIsGit/modlist-installer/assets/59506639/a52f4215-aaa4-4c10-9bfb-087b92bc5f44
 
 <b>The project:
  - is written in .NET CORE
